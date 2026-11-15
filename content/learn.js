@@ -52,6 +52,37 @@
     return n;
   };
 
+  // Custom widgets: remember the option you pick in a dropdown popup, ARIA radio or chat chip.
+  // Captured on pointerdown, before the widget closes the popup or removes the chips.
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (!e.isTrusted) return;
+      const t = e.composedPath()[0];
+      if (!t || !t.closest) return;
+      const opt = t.closest('[role="option"], [role="menuitem"], [role="menuitemradio"]');
+      const radio = t.closest('[role="radio"]:not(input)');
+      const chip = t.closest('[class*="chip" i]');
+      if (!opt && !radio && !chip) return;
+      const fields = D.collectFields();
+      let f = null, a = "";
+      if (opt) {
+        f = fields.find((x) => x.kind === "customselect" && x.el.getAttribute("aria-expanded") === "true");
+        a = (opt.innerText || opt.textContent || "").trim();
+      } else {
+        const g = radio || chip;
+        f = fields.find((x) => (x.kind === "ariaradio" || x.kind === "chips") && x.group.includes(g));
+        a = (g.innerText || g.textContent || "").trim();
+      }
+      if (!f || !f.question || f.question.length < 4 || !a) return;
+      const m = window.__AM_test && window.__AM_test.matchKey(f, null);
+      if (m && m.score >= 12) return; // profile data, not a reusable answer
+      pending.set(D.fieldSignature(f), { q: f.question.replace(/\s*\*\s*$/, "").slice(0, 300), a });
+      if (chip) setTimeout(() => window.__AM_saveAnswers().catch(() => {}), 50); // chat moves on immediately
+    },
+    true
+  );
+
   const flush = () => window.__AM_saveAnswers().catch(() => {});
   document.addEventListener("submit", flush, true);
   document.addEventListener(

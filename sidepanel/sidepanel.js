@@ -176,7 +176,7 @@ function renderJob() {
       ${!app || app.status === "Saved" ? `<button data-act="markApplied">Mark applied</button>` : ""}
       <button class="ghost sm" data-act="saveAnswers" title="Save answers you typed on this page to the answer bank">Save typed answers</button>
     </div>
-    ${S.lastFill ? `<div class="small">Filled <b>${S.lastFill.filled}</b>${S.lastFill.review ? `, <span style="color:var(--warn)">${S.lastFill.review} to check</span>` : ""}${S.lastFill.missing.length ? `<br><span style="color:var(--bad)">Left for you:</span> ${S.lastFill.missing.slice(0, 6).map(esc).join(" · ")}` : ""}<br><span class="muted">Review the form, then submit it yourself.</span></div>` : ""}
+    ${S.lastFill ? `<div class="small">Filled <b>${S.lastFill.filled}</b>${S.lastFill.review ? `, <span style="color:var(--warn)">${S.lastFill.review} to check</span>` : ""}${S.lastFill.suggested ? `<br><span style="color:var(--warn)">Chat answer suggested (outlined): click it yourself to send.</span>` : ""}${S.lastFill.missing.length ? `<br><span style="color:var(--bad)">Left for you:</span> ${S.lastFill.missing.slice(0, 6).map(esc).join(" · ")}` : ""}<br><span class="muted">Review the form, then submit it yourself.</span></div>` : ""}
     <label class="f">Resume to attach for this job
       <select data-bind="jobResume">${resumes.length ? resumes.map((f) => opt(f.id, S.jobState.resumeFileId || S.profile.defaultResumeId, (f.kind === "tailored" ? "✦ " : "") + f.name)).join("") : `<option value="">Upload a resume in Profile first</option>`}</select></label>
   </div>
@@ -493,8 +493,8 @@ const ACT = {
     const run = (allFrames) => chrome.scripting.executeScript({ target: { tabId: S.tabInfo.id, allFrames }, func: (o) => (window.__AM_fill ? window.__AM_fill(o) : null), args: [fillOptions()] });
     let res;
     try { res = await run(true); } catch { res = await run(false); flash("Some embedded frames couldn't be reached; filled the main page."); }
-    const sum = { filled: 0, review: 0, missing: [] };
-    for (const r of res) if (r.result) { sum.filled += r.result.filled; sum.review += r.result.review; sum.missing.push(...r.result.missing); }
+    const sum = { filled: 0, review: 0, missing: [], suggested: 0 };
+    for (const r of res) if (r.result) { sum.filled += r.result.filled; sum.review += r.result.review; sum.suggested += r.result.suggested || 0; sum.missing.push(...r.result.missing); }
     S.lastFill = sum;
     if (!sum.filled && !sum.missing.length) flash("No fillable fields found on this page.", true);
     render();

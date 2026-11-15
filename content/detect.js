@@ -132,11 +132,16 @@
   const SKIP_TYPES = new Set(["hidden", "submit", "button", "reset", "image", "password", "search"]);
   const SENSITIVE = /password|otp|captcha|cvv|card.?number|ssn|aadha?ar|pan.?(no|number|card)|passport|bank|ifsc|account.?number|pin$|security.?code/i;
 
+  const NATIVE = "input, textarea, select, [contenteditable='true']";
+  // Custom widgets that aren't real form fields: Workday/MUI dropdown buttons, ARIA radio groups, chat-bot answer chips
+  const CUSTOM = 'button[aria-haspopup="listbox"], [aria-haspopup="listbox"]:not(input), [role="combobox"]:not(input), [role="radiogroup"], [class*="chatbot" i] [class*="chip" i]';
+  const ANY_FIELD = "input:not([type=hidden]),select,textarea,[contenteditable='true']," + CUSTOM;
+  D.CUSTOM = CUSTOM;
+
   function walk(root, out) {
-    for (const el of root.querySelectorAll("input, textarea, select, [contenteditable='true'], *")) {
+    for (const el of root.querySelectorAll("*")) {
       if (el.shadowRoot) walk(el.shadowRoot, out);
-      if (!el.matches("input, textarea, select, [contenteditable='true']")) continue;
-      out.push(el);
+      if (el.matches(NATIVE) || el.matches(CUSTOM)) out.push(el);
     }
   }
   D.visible = (el) => {
@@ -162,7 +167,7 @@
       let p = el.parentElement;
       for (let i = 0; i < 4 && p; i++, p = p.parentElement) {
         // stop once the container holds other fields: its text would describe them, not this one
-        const others = [...p.querySelectorAll("input:not([type=hidden]),select,textarea")].filter((x) => x !== el && !(el.name && x.name === el.name));
+        const others = [...p.querySelectorAll(ANY_FIELD)].filter((x) => x !== el && !el.contains(x) && !x.contains(el) && !(el.name && x.name === el.name));
         if (others.length) break;
         const clone = p.cloneNode(true);
         clone.querySelectorAll("input,select,textarea,option,button,script,style").forEach((n) => n.remove());
@@ -172,6 +177,48 @@
       }
     }
     return parts.join(" ").replace(/\s+/g, " ").trim();
+  }
+
+  /** In chat-style flows (Naukri's apply bot) the question is the latest bot message above the answer box. */
+  function chatQuestion(el) {
+    const box = el.closest('[class*="chat" i]');
+    if (!box) return "";
+    let root = box;
+    while (root.parentElement && /chat/i.test(root.parentElement.className || "")) root = root.parentElement;
+    const before = [...root.querySelectorAll("*")].filter((n) => !n.children.length && n.textContent.trim().length > 3 && n.textContent.trim().length < 300 && !el.contains(n) && (n.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) && !/chip/i.test(n.className || ""));
+    const q = [...before].reverse().find((n) => /\?\s*$/.test(n.textContent.trim()));
+    return txt(q || before[before.length - 1]);
+  }
+  D.chatQuestion = chatQuestion;
+  const cleanQ = (q) => String(q || "").replace(/\b(select one|required|please select|choose)\b/gi, "").replace(/\s+/g, " ").trim();
+  const isEmptyText = (t) => !t || !t.trim() || /^(select( one)?|choose|please select|search|type to search)\b/i.test(t.trim()) || /^[-—\s]+$/.test(t);
+
+  function customField(el, seen) {
+    const role = el.getAttribute("role");
+    if (el.matches('[class*="chip" i]')) {
+      const parent = el.parentElement;
+      if (!parent || seen.has(parent)) return null;
+      seen.add(parent);
+      const group = [...parent.children].filter((c) => /chip/i.test(c.className || "") && D.visible(c) && txt(c).length < 60);
+      if (group.length < 2) return null;
+      const question = chatQuestion(parent) || labelText(parent);
+      return { el: parent, kind: "chips", question, descriptor: AM.norm(question), required: false, group, options: group.map(txt) };
+    }
+    if (role === "radiogroup") {
+      if (el.querySelector("input")) return null; // real radios are handled natively
+      const group = [...el.querySelectorAll('[role="radio"]')].filter(D.visible);
+      if (group.length < 2) return null;
+      const question = labelText(el) || chatQuestion(el);
+      return { el, kind: "ariaradio", question, descriptor: AM.norm(question), required: el.getAttribute("aria-required") === "true" || /\*\s*$/.test(question), group, options: group.map(txt), checked: group.some((g) => g.getAttribute("aria-checked") === "true") };
+    }
+    // dropdown trigger (Workday button, MUI div combobox)
+    if (el.querySelector("input, select")) return null; // wraps a real input: handled natively
+    if (el.disabled || el.getAttribute("aria-disabled") === "true") return null;
+    const label = labelText(el);
+    const current = txt(el);
+    const question = cleanQ(label.replace(current, "")) || cleanQ(label);
+    if (!question) return null;
+    return { el, kind: "customselect", question, descriptor: AM.norm(question + " " + (el.getAttribute("data-automation-id") || "")), required: el.getAttribute("aria-required") === "true" || /required|\*/i.test(label), current: isEmptyText(current) ? "" : current };
   }
 
   function groupQuestion(el) {
@@ -201,8 +248,15 @@
     const raw = [];
     walk(document, raw);
     const seenGroups = new Set();
+    const seenChips = new Set();
     const fields = [];
     for (const el of raw) {
+      if (!el.matches(NATIVE)) {
+        if (!D.visible(el)) continue;
+        const cf = customField(el, seenChips);
+        if (cf && !SENSITIVE.test(cf.question)) fields.push(cf);
+        continue;
+      }
       const type = (el.type || "").toLowerCase();
       if (el.tagName === "INPUT" && SKIP_TYPES.has(type)) continue;
       if (el.disabled || el.readOnly) continue;
@@ -227,8 +281,8 @@
         fields.push({ el, kind, question, descriptor: AM.norm(question + " " + attrs), required: group.some((g) => g.required), group, options: group.map((g) => labelText(g) || g.value) });
         continue;
       }
-      const lt = labelText(el);
-      const question = lt || el.placeholder || el.getAttribute("aria-label") || el.name || "";
+      const lt = labelText(el) || (el.isContentEditable ? chatQuestion(el) : "");
+      const question = lt || el.placeholder || el.getAttribute("aria-label") || el.getAttribute("data-placeholder") || el.name || "";
       const required = el.required || el.getAttribute("aria-required") === "true" || /\*\s*$/.test(lt);
       const f = { el, kind, question, descriptor: AM.norm([lt, el.placeholder, el.name, el.id, el.getAttribute("autocomplete")].filter(Boolean).join(" ")), required, ac: (el.getAttribute("autocomplete") || "").toLowerCase() };
       if (kind === "select") f.options = [...el.options].map((o) => o.text.trim());

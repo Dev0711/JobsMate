@@ -1,0 +1,143 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Custom dropdowns - Workday / MUI / react-select / chatbot style</title>
+<script src="/test-forms/load.js"></script>
+<style>
+  body{font-family:sans-serif;max-width:680px;margin:20px auto}
+  .field{margin:14px 0} label,.lbl{display:block;font-weight:600;margin-bottom:4px}
+  button.wd{min-width:260px;text-align:left;padding:6px 10px;border:1px solid #999;background:#fff}
+  .popup{position:absolute;background:#fff;border:1px solid #888;box-shadow:0 4px 12px rgba(0,0,0,.2);max-height:220px;overflow:auto;z-index:10;min-width:260px}
+  .popup [role=option]{padding:5px 10px;cursor:pointer} .popup [role=option]:hover{background:#eef}
+  .popup input{width:90%;margin:6px}
+  .mui{display:inline-block;min-width:240px;padding:6px 10px;border:1px solid #999;cursor:pointer}
+  .rs{position:relative;width:280px} .rs input{width:100%;padding:6px}
+  .rs-menu{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #888}
+  .rs-menu div{padding:5px 8px;cursor:pointer}
+  [role=radio]{display:inline-block;border:1px solid #999;border-radius:14px;padding:3px 12px;margin-right:6px;cursor:pointer}
+  [role=radio][aria-checked=true]{background:#4f46e5;color:#fff}
+  .chatbot_Drawer{border:1px solid #ccc;border-radius:8px;padding:10px;margin-top:20px}
+  .botMsg{background:#f1f1f6;border-radius:8px;padding:6px 10px;margin:6px 0;width:fit-content}
+  .userMsg{background:#4f46e5;color:#fff;border-radius:8px;padding:6px 10px;margin:6px 0 6px auto;width:fit-content}
+  .chatbot_Chip{display:inline-block;border:1px solid #4f46e5;color:#4f46e5;border-radius:16px;padding:4px 12px;margin:4px;cursor:pointer}
+  .textArea{border:1px solid #aaa;min-height:24px;padding:6px;margin-top:6px}
+</style></head><body>
+<h1>Software Engineer II</h1>
+<p>Workday-style and other custom widgets. Requirements: 3+ years React.</p>
+
+<!-- 1. Workday: button + listbox popup appended to <body>, with a search box for long lists -->
+<div class="field" data-automation-id="formField-notice">
+  <label id="np-l">Notice Period *</label>
+  <button class="wd" id="np" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="np-l" data-opts="Immediate|15 Days|30 Days|60 Days|90 Days">Select One</button>
+</div>
+<div class="field" data-automation-id="formField-country">
+  <label id="ct-l">Country *</label>
+  <button class="wd" id="ct" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="ct-l" data-search="1" data-opts="Afghanistan|Australia|Bangladesh|Canada|France|Germany|India|Indonesia|Ireland|Japan|Nepal|Singapore|Sri Lanka|United Arab Emirates|United Kingdom|United States of America">Select One</button>
+</div>
+<div class="field">
+  <label id="deg-l">Highest Degree</label>
+  <button class="wd" id="deg" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="deg-l" data-opts="High School|Diploma|Bachelor of Technology (B.Tech)|Bachelor of Science|Master of Technology|MBA">Select One</button>
+</div>
+
+<div class="field">
+  <label id="src-l">How did you hear about us?</label>
+  <button class="wd" id="src" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="src-l" data-opts="LinkedIn|Naukri|Employee Referral|Company Website|Other">Select One</button>
+</div>
+
+<!-- 2. MUI-style: div role=combobox -->
+<div class="field">
+  <div class="lbl" id="exp-l">Total years of experience</div>
+  <div class="mui" id="exp" role="combobox" tabindex="0" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="exp-l" data-opts="0-1 years|1-3 years|3-5 years|5-8 years|8+ years">&nbsp;</div>
+</div>
+
+<!-- 3. react-select style: input role=combobox, async filtered menu, picks on mousedown -->
+<div class="field">
+  <label for="loc">Current Location</label>
+  <div class="rs"><input id="loc" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off"></div>
+</div>
+
+<!-- 4. ARIA radiogroup of divs -->
+<div class="field">
+  <div class="lbl" id="rel-l">Are you willing to relocate?</div>
+  <div role="radiogroup" aria-labelledby="rel-l"><div role="radio" aria-checked="false" tabindex="0">Yes</div><div role="radio" aria-checked="false" tabindex="0">No</div></div>
+</div>
+
+<!-- 5. Naukri chatbot style -->
+<div class="chatbot_Drawer">
+  <div class="chatbot_List">
+    <div class="botMsg">Hi Asha, thanks for applying! A few quick questions.</div>
+    <div class="botMsg">Are you authorized to work in India?</div>
+  </div>
+  <div class="chatbot_Chips"><div class="chatbot_Chip">Yes</div><div class="chatbot_Chip">No</div></div>
+  <div class="textArea" contenteditable="true" data-placeholder="Type message here..."></div>
+</div>
+
+<pre id="state"></pre>
+<script>
+const state = {};
+const show = () => (document.getElementById("state").textContent = JSON.stringify(state, null, 1));
+show();
+let open = null;
+function closePopup() { if (open) { open.popup.remove(); open.trigger.setAttribute("aria-expanded", "false"); open = null; } }
+function openPopup(trigger) {
+  closePopup();
+  const opts = trigger.dataset.opts.split("|");
+  const popup = document.createElement("div");
+  popup.className = "popup"; popup.setAttribute("role", "listbox"); popup.id = trigger.id + "-list";
+  trigger.setAttribute("aria-controls", popup.id);
+  const r = trigger.getBoundingClientRect();
+  popup.style.left = r.left + scrollX + "px"; popup.style.top = r.bottom + scrollY + "px";
+  let search;
+  if (trigger.dataset.search) { search = document.createElement("input"); search.placeholder = "Search"; popup.appendChild(search); }
+  const list = document.createElement("div"); popup.appendChild(list);
+  const draw = (q = "") => {
+    list.innerHTML = "";
+    for (const o of opts.filter((o) => o.toLowerCase().includes(q.toLowerCase()))) {
+      const d = document.createElement("div"); d.setAttribute("role", "option"); d.textContent = o;
+      d.addEventListener("click", () => { trigger.textContent = o; state[trigger.id] = o; show(); closePopup(); });
+      list.appendChild(d);
+    }
+  };
+  if (search) search.addEventListener("input", () => setTimeout(() => draw(search.value), 150)); // async filtering
+  setTimeout(() => draw(), 120); // options render a moment after opening
+  document.body.appendChild(popup);
+  trigger.setAttribute("aria-expanded", "true");
+  open = { trigger, popup };
+}
+document.querySelectorAll("button.wd, .mui").forEach((t) => t.addEventListener("click", (e) => { e.stopPropagation(); open && open.trigger === t ? closePopup() : openPopup(t); }));
+document.addEventListener("click", (e) => { if (open && !open.popup.contains(e.target)) closePopup(); });
+document.addEventListener("keydown", (e) => e.key === "Escape" && closePopup());
+
+// react-select-like
+const CITIES = ["Bengaluru", "Bengaluru Rural", "Belagavi", "Pune", "Hyderabad", "Chennai", "Mumbai", "Delhi"];
+const loc = document.getElementById("loc"); let menu;
+loc.addEventListener("input", () => {
+  menu && menu.remove();
+  const q = loc.value.toLowerCase(); if (!q) return;
+  setTimeout(() => {
+    menu && menu.remove();
+    menu = document.createElement("div"); menu.className = "rs-menu"; menu.setAttribute("role", "listbox"); menu.id = "loc-menu";
+    loc.setAttribute("aria-controls", "loc-menu"); loc.setAttribute("aria-expanded", "true");
+    for (const c of CITIES.filter((c) => c.toLowerCase().includes(q))) {
+      const d = document.createElement("div"); d.setAttribute("role", "option"); d.textContent = c;
+      d.addEventListener("mousedown", (e) => { e.preventDefault(); loc.value = c; state.loc = c; show(); menu.remove(); loc.setAttribute("aria-expanded", "false"); });
+      menu.appendChild(d);
+    }
+    loc.parentElement.appendChild(menu);
+  }, 200);
+});
+
+// aria radios
+document.querySelectorAll('[role=radiogroup]').forEach((g) => g.addEventListener("click", (e) => {
+  const r = e.target.closest("[role=radio]"); if (!r) return;
+  g.querySelectorAll("[role=radio]").forEach((x) => x.setAttribute("aria-checked", String(x === r)));
+  state.relocate = r.textContent; show();
+}));
+
+// chatbot chips
+document.querySelectorAll(".chatbot_Chip").forEach((c) => c.addEventListener("click", () => {
+  const m = document.createElement("div"); m.className = "userMsg"; m.textContent = c.textContent;
+  document.querySelector(".chatbot_List").appendChild(m);
+  state.chat = c.textContent; show();
+  document.querySelector(".chatbot_Chips").remove();
+}));
+</script>
+</body></html>

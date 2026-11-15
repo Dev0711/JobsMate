@@ -57,7 +57,7 @@
     const opts = (await send({ type: "getFillOptions" })) || {};
     const s = await window.__AM_fill(opts);
     const miss = s.missing.length ? `<div class="muted">Left for you: ${s.missing.slice(0, 4).map(AM.esc).join(", ")}${s.missing.length > 4 ? "…" : ""}</div>` : "";
-    toast(`<b>Filled ${s.filled} field${s.filled === 1 ? "" : "s"}</b>${s.review ? ` · ${s.review} to check (amber)` : ""}${miss}<div class="muted">Review everything, then submit yourself.</div>`, [], 8000);
+    toast(`<b>Filled ${s.filled} field${s.filled === 1 ? "" : "s"}</b>${s.review ? ` · ${s.review} to check (amber)` : ""}${s.suggested ? `<div class="muted">Suggested answer highlighted: click it to send.</div>` : ""}${miss}<div class="muted">Review everything, then submit yourself.</div>`, [], 8000);
   }
   window.__AM_runFill = runFill;
   async function maybeShowFab() {

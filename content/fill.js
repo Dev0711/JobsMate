@@ -159,19 +159,80 @@
     fire(el, "change");
   }
 
+  // ---------- custom widgets (Workday / MUI / react-select / ARIA radios / chat chips) ----------
+  /** A click as a real mouse would do it: some widgets listen to pointerdown/mousedown, others to click. */
+  function realClick(el) {
+    el.scrollIntoView({ block: "center", inline: "nearest" });
+    const r = el.getBoundingClientRect();
+    const o = { bubbles: true, cancelable: true, composed: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
+    el.dispatchEvent(new PointerEvent("pointerdown", { ...o, pointerType: "mouse", isPrimary: true }));
+    el.dispatchEvent(new MouseEvent("mousedown", o));
+    el.dispatchEvent(new PointerEvent("pointerup", { ...o, pointerType: "mouse", isPrimary: true }));
+    el.dispatchEvent(new MouseEvent("mouseup", o));
+    el.dispatchEvent(new MouseEvent("click", o));
+  }
+  const shown = (n) => { const r = n.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(n).visibility !== "hidden"; };
+  const optText = (o) => (o.innerText || o.textContent || "").replace(/\s+/g, " ").trim();
+  function popupFor(trigger) {
+    const id = trigger.getAttribute("aria-controls") || trigger.getAttribute("aria-owns");
+    const byId = id && document.getElementById(id);
+    if (byId && shown(byId)) return byId;
+    const lists = [...document.querySelectorAll('[role="listbox"], [role="menu"]')].filter(shown);
+    return lists[lists.length - 1] || null; // popups are usually appended last
+  }
+  function visibleOptions(trigger) {
+    const scope = popupFor(trigger) || document;
+    return [...scope.querySelectorAll('[role="option"], [role="menuitem"], [role="menuitemradio"]')].filter((o) => shown(o) && !o.closest("select") && optText(o) && o.getAttribute("aria-disabled") !== "true");
+  }
+  async function waitFor(fn, ms = 1500, step = 80) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { const v = fn(); if (v) return v; await sleep(step); }
+    return fn();
+  }
+  function closePopup(trigger) {
+    for (const t of [document.activeElement, trigger, document.body]) t && t.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }));
+  }
+  /** Open a button/div dropdown, search if it has a search box, click the best option. */
+  async function fillCustomSelect(trigger, value, key, kind) {
+    realClick(trigger);
+    let opts = await waitFor(() => { const o = visibleOptions(trigger); return o.length ? o : null; });
+    if (!opts && trigger.getAttribute("aria-expanded") !== "true") {
+      trigger.focus();
+      trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", keyCode: 40, bubbles: true }));
+      opts = await waitFor(() => { const o = visibleOptions(trigger); return o.length ? o : null; }, 800);
+    }
+    opts = opts || [];
+    let i = chooseOption(opts.map(optText), value, key, kind);
+    if (i < 0) {
+      // long lists (country, city, college) usually have a search box inside the popup
+      const pop = popupFor(trigger);
+      const ae = document.activeElement;
+      const search = (pop && [...pop.querySelectorAll("input:not([type=hidden])")].find(shown)) || (ae && ae.tagName === "INPUT" && ae !== trigger ? ae : null);
+      if (search) {
+        const term = typeof value === "boolean" ? (value ? "Yes" : "No") : String(value).split(/[,(]/)[0].trim();
+        setValue(search, term);
+        search.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: term.slice(-1) }));
+        opts = await waitFor(() => { const o = visibleOptions(trigger); return o.length && o.some((x) => AM.norm(optText(x)).includes(AM.norm(term).split(" ")[0])) ? o : null; }, 1500);
+        opts = opts || visibleOptions(trigger);
+        i = chooseOption(opts.map(optText), value, key, kind);
+        if (i < 0 && opts.length === 1) i = 0;
+      }
+    }
+    if (i < 0) { closePopup(trigger); return false; }
+    realClick(opts[i]);
+    await sleep(150);
+    if (popupFor(trigger) && trigger.getAttribute("aria-expanded") === "true") closePopup(trigger);
+    return true;
+  }
   async function fillCombobox(el, text) {
     setValue(el, text);
     el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowDown" }));
-    await sleep(450);
-    const listId = el.getAttribute("aria-controls") || el.getAttribute("aria-owns");
-    const scope = (listId && document.getElementById(listId)) || document;
-    const opts = [...scope.querySelectorAll('[role="option"]')].filter((o) => o.getBoundingClientRect().height > 0);
-    if (!opts.length) return false;
-    const i = chooseOption(opts.map((o) => o.textContent.trim()), text, "", "text");
-    const pick = opts[i >= 0 ? i : 0];
+    const opts = await waitFor(() => { const o = visibleOptions(el); return o.length ? o : null; }, 1800);
+    if (!opts) return false;
+    const i = chooseOption(opts.map(optText), text, "", "text");
     if (i < 0 && opts.length > 1) return false;
-    pick.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
-    pick.click();
+    realClick(opts[i >= 0 ? i : 0]);
+    await sleep(100);
     return true;
   }
 
@@ -188,6 +249,8 @@
       if (["text", "textarea", "date", "combobox"].includes(f.kind) && (el.value || (el.isContentEditable && el.textContent.trim())) && !window.__AM_filled.has(el)) continue;
       if (f.kind === "select" && el.selectedIndex > 0 && !window.__AM_filled.has(el)) continue;
       if (f.kind === "file" && el.files && el.files.length) continue;
+      if (f.kind === "customselect" && f.current && !window.__AM_filled.has(el)) continue;
+      if (f.kind === "ariaradio" && f.checked && !window.__AM_filled.has(el)) continue;
       summary.total++;
       let m = matchKey(f, siteMap);
       // A near-identical saved answer beats a loose profile match (e.g. "Why are you leaving?" vs cover letter).
@@ -237,6 +300,23 @@
         } else if (f.kind === "combobox") {
           ok = await fillCombobox(el, typeof value === "boolean" ? (value ? "Yes" : "No") : value);
           if (!ok) state = "review", (ok = !!el.value);
+        } else if (f.kind === "customselect") {
+          ok = await fillCustomSelect(el, value, key, kindOfKey);
+        } else if (f.kind === "ariaradio") {
+          const i = chooseOption(f.options, value, key, kindOfKey);
+          if (i >= 0) { realClick(f.group[i]); ok = true; }
+        } else if (f.kind === "chips") {
+          // Chat chips send the answer the moment they're clicked, so we only point at our suggestion.
+          const i = chooseOption(f.options, value, key, kindOfKey);
+          if (i >= 0) {
+            const chip = f.group[i];
+            chip.style.outline = `3px solid ${COLORS.review}`;
+            chip.style.outlineOffset = "2px";
+            chip.dataset.amState = "review";
+            chip.title = "ApplyMate suggests this answer: click it to send";
+            summary.suggested = (summary.suggested || 0) + 1;
+            continue;
+          }
         } else {
           setValue(el, typeof value === "boolean" ? (value ? "Yes" : "No") : value);
           ok = true;

@@ -25,6 +25,12 @@ Fills job application forms, remembers your answers, scores jobs against your re
    - Amber: please check (usually reused answers).
    - Red: required and left for you.
    - Works inside iframes too (company sites that embed Greenhouse or Lever).
+   - Dropdowns of every common kind:
+     - normal dropdowns, radio buttons and checkboxes;
+     - Workday and MUI-style button dropdowns, using the popup's search box for long lists like Country;
+     - type-to-search location and skill pickers;
+     - ARIA radio groups.
+   - Naukri-style chatbot questions: ApplyMate **outlines** the suggested answer chip, and you click it, because a chip sends the answer immediately.
 5. **Teach it.** Answers you type are saved to the **Answers** bank and reused next time. Right-click a field and choose **ApplyMate: this field is…** to fix a mapping on that site for good.
 6. **Track.**
    - After you submit a form ApplyMate filled, it asks whether to mark the job as applied.
@@ -45,4 +51,4 @@ Fills job application forms, remembers your answers, scores jobs against your re
 
 ## Development
 - No build step. The vendored libraries in `lib/vendor/` are pdf.js 4.10.38, plus one bundle of jsPDF 2.5.2 and docx 9.0.3.
-- `test-forms/` has local test pages (Greenhouse-like, React-controlled, an iframe on a company page) and `panel.html`, a harness that runs the side panel next to a test page. To use them, serve the folder with `python -m http.server 8765` and open `http://localhost:8765/test-forms/panel.html`. You can delete this folder; the extension doesn't use it.
+- `test-forms/` has local test pages (Greenhouse-like, React-controlled, an iframe on a company page, custom dropdowns / chatbot chips) and `panel.html`, a harness that runs the side panel next to a test page. To use them, serve the folder with `python -m http.server 8765` and open `http://localhost:8765/test-forms/panel.html`. You can delete this folder; the extension doesn't use it.
