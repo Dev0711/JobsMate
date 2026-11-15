@@ -1,0 +1,102 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Screening questions - mixed custom fields</title>
+<script src="/test-forms/load.js"></script>
+<style>
+  body{font-family:sans-serif;max-width:700px;margin:20px auto}
+  .q{margin:16px 0} .q > .label{font-weight:600;margin-bottom:6px}
+  /* plain div dropdown, no ARIA */
+  .xx-select{position:relative;width:280px}
+  .xx-select__control{border:1px solid #999;padding:7px 10px;cursor:pointer;background:#fff}
+  .xx-select__menu{position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #888;z-index:5;margin:0;padding:0;list-style:none}
+  .xx-select__menu li{padding:6px 10px;cursor:pointer} .xx-select__menu li:hover{background:#eef}
+  .btn-row button{padding:6px 16px;margin-right:6px;border:1px solid #4f46e5;background:#fff;color:#4f46e5;border-radius:6px;cursor:pointer}
+  .btn-row button.active{background:#4f46e5;color:#fff}
+  [role=switch]{display:inline-block;width:44px;height:22px;border-radius:11px;background:#ccc;position:relative;cursor:pointer;vertical-align:middle}
+  [role=switch][aria-checked=true]{background:#16a34a}
+  [role=checkbox]{display:inline-block;border:1px solid #999;padding:3px 10px;margin:3px;border-radius:4px;cursor:pointer}
+  [role=checkbox][aria-checked=true]{background:#e0e7ff;border-color:#4f46e5}
+  .tags{border:1px solid #999;padding:4px;width:400px} .tags span{background:#e0e7ff;margin:2px;padding:2px 6px;display:inline-block}
+  .tags input{border:0;outline:0;padding:4px;width:120px}
+  .tag-menu{border:1px solid #888;width:200px;background:#fff}
+  .tag-menu div{padding:4px 8px;cursor:pointer}
+</style></head><body>
+<h1>Frontend Engineer: screening</h1>
+<form onsubmit="event.preventDefault()">
+
+<div class="q"><div class="label">Preferred work location *</div>
+  <div class="xx-select" data-opts="Bengaluru|Pune|Hyderabad|Chennai|Gurugram|Remote"><div class="xx-select__control">Select…</div></div></div>
+
+<div class="q"><div class="label">How many years of experience do you have with React? *</div><input name="yrs_react"></div>
+
+<div class="q"><div class="label">Do you have hands-on experience with Kafka?</div>
+  <div class="btn-row"><button type="button">Yes</button><button type="button">No</button></div></div>
+
+<div class="q"><div class="label">Can you join within 30 days? *</div>
+  <div class="btn-row"><button type="button">Yes</button><button type="button">No</button></div></div>
+
+<fieldset class="q"><legend class="label">Which of these technologies have you worked with?</legend>
+  <label><input type="checkbox" name="tech" value="react"> React</label>
+  <label><input type="checkbox" name="tech" value="angular"> Angular</label>
+  <label><input type="checkbox" name="tech" value="node"> Node.js</label>
+  <label><input type="checkbox" name="tech" value="go"> Golang</label>
+  <label><input type="checkbox" name="tech" value="aws"> AWS</label></fieldset>
+
+<div class="q"><div class="label" id="tools-l">Testing tools you use</div>
+  <div role="group" aria-labelledby="tools-l"><div role="checkbox" aria-checked="false" tabindex="0">Jest</div><div role="checkbox" aria-checked="false" tabindex="0">Cypress</div><div role="checkbox" aria-checked="false" tabindex="0">Mocha</div></div></div>
+
+<div class="q"><span class="label" id="reloc-l">Open to relocation</span> <div role="switch" aria-checked="false" aria-labelledby="reloc-l" tabindex="0"></div></div>
+
+<div class="q"><div class="label">Date of birth</div><input name="dob_text" placeholder="DD/MM/YYYY"></div>
+
+<div class="q"><label for="sk">Key skills</label>
+  <div class="tags" id="tags"><input id="sk" role="combobox" aria-autocomplete="list" autocomplete="off"></div></div>
+
+<div class="q"><div class="label">Expected CTC (LPA)</div><input name="ectc_opt"></div>
+
+<div class="q"><div class="label">Are you willing to work in rotational night shifts?</div>
+  <div class="btn-row"><button type="button">Yes</button><button type="button">No</button></div></div>
+
+<div class="q"><div class="label">Rate your English communication (1-5)</div>
+  <div class="xx-select" data-opts="1|2|3|4|5"><div class="xx-select__control">Select…</div></div></div>
+
+<div class="q"><div class="label">Link to a project you're proud of</div><input name="proud_link"></div>
+
+<button type="submit">Submit</button>
+</form>
+<pre id="state"></pre>
+<script>
+const state = {}; const show = () => (document.getElementById("state").textContent = JSON.stringify(state, null, 1)); show();
+document.querySelectorAll(".xx-select").forEach((s, n) => {
+  const ctl = s.querySelector(".xx-select__control");
+  ctl.addEventListener("click", (e) => {
+    e.stopPropagation();
+    document.querySelectorAll(".xx-select__menu").forEach((m) => m.remove());
+    const ul = document.createElement("ul"); ul.className = "xx-select__menu";
+    for (const o of s.dataset.opts.split("|")) {
+      const li = document.createElement("li"); li.textContent = o;
+      li.addEventListener("click", (ev) => { ev.stopPropagation(); ctl.textContent = o; state["select" + n] = o; show(); ul.remove(); });
+      ul.appendChild(li);
+    }
+    s.appendChild(ul);
+  });
+});
+document.addEventListener("click", () => document.querySelectorAll(".xx-select__menu").forEach((m) => m.remove()));
+document.querySelectorAll(".btn-row").forEach((row, n) => row.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  row.querySelectorAll("button").forEach((x) => x.classList.toggle("active", x === b)); state["btn" + n] = b.textContent; show();
+}));
+document.querySelectorAll("[role=checkbox]").forEach((c) => c.addEventListener("click", () => { c.setAttribute("aria-checked", String(c.getAttribute("aria-checked") !== "true")); state.tools = [...document.querySelectorAll("[role=checkbox][aria-checked=true]")].map((x) => x.textContent); show(); }));
+const sw = document.querySelector("[role=switch]");
+sw.addEventListener("click", () => { sw.setAttribute("aria-checked", String(sw.getAttribute("aria-checked") !== "true")); state.relocate = sw.getAttribute("aria-checked"); show(); });
+document.querySelectorAll("input[name=tech]").forEach((c) => c.addEventListener("change", () => { state.tech = [...document.querySelectorAll("input[name=tech]:checked")].map((x) => x.value); show(); }));
+document.querySelectorAll("input[name]").forEach((i) => i.type !== "checkbox" && i.addEventListener("input", () => { state[i.name] = i.value; show(); }));
+// tag picker
+const SK = ["React", "Redux", "TypeScript", "JavaScript", "Node.js", "Jest", "AWS", "Angular", "CSS", "HTML"];
+const sk = document.getElementById("sk"); let menu; state.skills = [];
+sk.addEventListener("input", () => { menu && menu.remove(); const q = sk.value.toLowerCase(); if (!q) return;
+  setTimeout(() => { menu && menu.remove(); menu = document.createElement("div"); menu.className = "tag-menu"; menu.setAttribute("role", "listbox"); menu.id = "sk-menu"; sk.setAttribute("aria-controls", "sk-menu");
+    for (const s of SK.filter((x) => x.toLowerCase().startsWith(q))) { const d = document.createElement("div"); d.setAttribute("role", "option"); d.textContent = s;
+      d.addEventListener("mousedown", (e) => { e.preventDefault(); const t = document.createElement("span"); t.textContent = s; document.getElementById("tags").insertBefore(t, sk); state.skills.push(s); show(); sk.value = ""; menu.remove(); }); menu.appendChild(d); }
+    document.getElementById("tags").after(menu); }, 150); });
+</script>
+</body></html>

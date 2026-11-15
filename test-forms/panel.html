@@ -43,11 +43,14 @@
     };
     chrome.scripting = {
       executeScript: async ({ target: t, func, args = [] }) => {
-        const wins = t.allFrames ? framesOf(target.contentWindow) : [target.contentWindow];
+        const all = framesOf(target.contentWindow);
+        const ids = t.frameIds || (t.allFrames ? all.map((_, i) => i) : [0]);
         const out = [];
-        for (const w of wins) {
+        for (const i of ids) {
+          const w = all[i];
+          if (!w) continue;
           w.__tmpFn = w.eval("(" + func.toString() + ")");
-          out.push({ result: await w.__tmpFn(...args) });
+          out.push({ frameId: i, result: await w.__tmpFn(...args) });
         }
         return out;
       },

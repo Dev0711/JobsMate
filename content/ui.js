@@ -56,8 +56,8 @@
   async function runFill() {
     const opts = (await send({ type: "getFillOptions" })) || {};
     const s = await window.__AM_fill(opts);
-    const miss = s.missing.length ? `<div class="muted">Left for you: ${s.missing.slice(0, 4).map(AM.esc).join(", ")}${s.missing.length > 4 ? "…" : ""}</div>` : "";
-    toast(`<b>Filled ${s.filled} field${s.filled === 1 ? "" : "s"}</b>${s.review ? ` · ${s.review} to check (amber)` : ""}${s.suggested ? `<div class="muted">Suggested answer highlighted: click it to send.</div>` : ""}${miss}<div class="muted">Review everything, then submit yourself.</div>`, [], 8000);
+    const miss = s.missing.length ? `<div class="muted">Required, still empty:${s.missing.slice(0, 4).map(AM.esc).join(", ")}${s.missing.length > 4 ? "…" : ""}</div>` : "";
+    toast(`<b>Filled ${s.filled} field${s.filled === 1 ? "" : "s"}</b>${s.review ? ` · ${s.review} to check (amber)` : ""}${s.suggested ? `<div class="muted">Suggested answer highlighted: click it to send.</div>` : ""}${miss}${s.unanswered && s.unanswered.length ? `<div class="muted">${s.unanswered.length} question${s.unanswered.length > 1 ? "s" : ""} not in your profile (red = required, blue dashed = optional). Open ApplyMate (Alt+Shift+A) → “Answer the rest with AI”.</div>` : ""}<div class="muted">Review everything, then submit yourself.</div>`, [], 8000);
   }
   window.__AM_runFill = runFill;
   async function maybeShowFab() {

@@ -9,6 +9,7 @@
     const el = f.el;
     if (f.kind === "select") return el.selectedIndex > 0 ? el.options[el.selectedIndex].text.trim() : "";
     if (f.kind === "radio") { const i = f.group.findIndex((g) => g.checked); return i >= 0 ? f.options[i] : ""; }
+    if (f.kind === "checkgroup") return f.group.map((g, i) => ((g.tagName === "INPUT" ? g.checked : g.getAttribute("aria-checked") === "true") ? f.options[i] : "")).filter(Boolean).join(" | ");
     if (f.kind === "checkbox") return el.checked ? "Yes" : "No";
     if (el.isContentEditable) return el.innerText.trim();
     return String(el.value || "").trim();
@@ -63,6 +64,16 @@
       const opt = t.closest('[role="option"], [role="menuitem"], [role="menuitemradio"]');
       const radio = t.closest('[role="radio"]:not(input)');
       const chip = t.closest('[class*="chip" i]');
+      const btn = !opt && !radio && !chip && t.closest('button, [role="button"]');
+      if (btn) {
+        // Yes/No button rows
+        const bf = D.collectFields().find((x) => x.kind === "buttongroup" && x.group.includes(btn));
+        if (bf && bf.question && bf.question.length > 3) {
+          const m = window.__AM_test && window.__AM_test.matchKey(bf, null);
+          if (!(m && m.score >= 12)) pending.set(D.fieldSignature(bf), { q: bf.question.replace(/\s*\*\s*$/, "").slice(0, 300), a: (btn.innerText || "").trim() });
+        }
+        return;
+      }
       if (!opt && !radio && !chip) return;
       const fields = D.collectFields();
       let f = null, a = "";

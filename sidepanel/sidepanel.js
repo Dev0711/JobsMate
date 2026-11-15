@@ -176,17 +176,23 @@ function renderJob() {
       ${!app || app.status === "Saved" ? `<button data-act="markApplied">Mark applied</button>` : ""}
       <button class="ghost sm" data-act="saveAnswers" title="Save answers you typed on this page to the answer bank">Save typed answers</button>
     </div>
-    ${S.lastFill ? `<div class="small">Filled <b>${S.lastFill.filled}</b>${S.lastFill.review ? `, <span style="color:var(--warn)">${S.lastFill.review} to check</span>` : ""}${S.lastFill.suggested ? `<br><span style="color:var(--warn)">Chat answer suggested (outlined): click it yourself to send.</span>` : ""}${S.lastFill.missing.length ? `<br><span style="color:var(--bad)">Left for you:</span> ${S.lastFill.missing.slice(0, 6).map(esc).join(" · ")}` : ""}<br><span class="muted">Review the form, then submit it yourself.</span></div>` : ""}
+    ${S.lastFill ? `<div class="small">Filled <b>${S.lastFill.filled}</b>${S.lastFill.review ? `, <span style="color:var(--warn)">${S.lastFill.review} to check</span>` : ""}${S.lastFill.suggested ? `<br><span style="color:var(--warn)">Chat answer suggested (outlined): click it yourself to send.</span>` : ""}${S.lastFill.missing.length ? `<br><span style="color:var(--bad)">Required, still empty:</span> ${S.lastFill.missing.slice(0, 6).map(esc).join(" · ")}` : ""}<br><span class="muted">Review the form, then submit it yourself.</span></div>
+      ${S.lastFill.unanswered.length ? `<div class="stack small" style="border:1px dashed var(--accent);border-radius:8px;padding:8px">
+        <div><b>${S.lastFill.unanswered.length} question${S.lastFill.unanswered.length > 1 ? "s" : ""} your profile can't answer</b> (${S.lastFill.unanswered.filter((u) => u.required).length} required <span style="color:var(--bad)">red</span>, ${S.lastFill.unanswered.filter((u) => !u.required).length} optional <span style="color:#2563eb">blue dashed</span>)</div>
+        <details><summary class="small">Show them</summary><ol style="margin:4px 0;padding-left:18px">${S.lastFill.unanswered.map((u) => `<li>${esc(u.question)}${u.options.length ? ` <span class="muted">(${esc(u.options.slice(0, 5).join(" / "))}${u.options.length > 5 ? "…" : ""})</span>` : ""}</li>`).join("")}</ol></details>
+        <div class="row">${aiBtn("questions", "Answer the rest with AI")}</div>
+        <div class="muted">Answers you approve are filled in and saved to your answer bank, so next time they fill automatically.</div>
+      </div>` : ""}` : ""}
     <label class="f">Resume to attach for this job
       <select data-bind="jobResume">${resumes.length ? resumes.map((f) => opt(f.id, S.jobState.resumeFileId || S.profile.defaultResumeId, (f.kind === "tailored" ? "✦ " : "") + f.name)).join("") : `<option value="">Upload a resume in Profile first</option>`}</select></label>
   </div>
 
   ${jobLooks ? `<div class="card stack">
     <h3>Match</h3>
-    ${sc.matched.length ? `<div><span class="small muted">You have:</span> ${sc.matched.map((s) => `<span class="chip ok">${esc(s)}</span>`).join("")}</div>` : ""}
-    ${sc.missing.length ? `<div><span class="small muted">Missing:</span> ${sc.missing.map((s) => `<span class="chip bad">${esc(s)}</span>`).join("")}</div>` : ""}
+    ${sc.matched.length ? `<div><span class="small muted">You have:</span> ${sc.matched.map((s) => `<span class="chip ok">${esc(AM.skillLabel(s))}</span>`).join("")}</div>` : ""}
+    ${sc.missing.length ? `<div><span class="small muted">Skills this job asks for that aren't on your resume. Add only the ones you've really used:</span><div>${sc.missing.map((s) => `<span class="chip bad">${esc(AM.skillLabel(s))} <a href="#" data-act="addSkill" data-skill="${esc(AM.skillLabel(s))}" title="Add to the Skills section of your resume">+ Add</a></span>`).join("")}</div></div>` : ""}
     ${sc.flags.length ? sc.flags.map((f) => `<div class="chip warn">⚠ ${esc(f)}</div>`).join("") : ""}
-    ${sc.ats.length ? `<div><span class="small muted">JD keywords not in your resume (add only if true):</span> ${sc.ats.map((s) => `<span class="chip">${esc(s)}</span>`).join("")}</div>` : ""}
+    ${sc.highlights.length ? `<details><summary class="small">Key requirements in this job (${sc.highlights.filter((h) => !h.missing.length).length}/${sc.highlights.length} met)</summary><ul class="small" style="margin:6px 0;padding-left:16px">${sc.highlights.map((h) => `<li>${h.missing.length ? "✗" : "✓"} ${esc(h.text)}${h.missing.length ? ` <span style="color:var(--bad)">(${esc(h.missing.map(AM.skillLabel).join(", "))})</span>` : ""}</li>`).join("")}</ul></details>` : ""}
     ${!S.settings.prefs.roles ? `<div class="small muted">Tip: set target roles & locations in <a href="#" data-act="goTab" data-tab="settings">Settings</a> for better scores.</div>` : ""}
     ${nano && !S.keywords ? `<button class="sm" data-act="nanoKeywords">Extract key requirements (on-device AI)</button>` : ""}
     ${S.keywords ? `<div><span class="small muted">Key requirements:</span> ${S.keywords.map((s) => `<span class="chip">${esc(s)}</span>`).join("")}</div>` : ""}
@@ -483,6 +489,16 @@ function renderSettings() {
 const ACT = {
   goTab: (t) => { S.tab = t.dataset.tab; render(); },
   reread: () => loadJob(),
+  addSkill: async (t) => {
+    const skill = t.dataset.skill;
+    const list = AM.splitList(S.profile.skills);
+    if (!list.some((s) => AM.canonSkill(s) === AM.canonSkill(skill) || s.toLowerCase() === skill.toLowerCase())) list.push(skill);
+    S.profile.skills = list.join(", ");
+    await AM.set("profile", S.profile);
+    if (S.tailor && Array.isArray(S.tailor.skills) && !S.tailor.skills.includes(skill)) S.tailor.skills.push(skill);
+    render();
+    flash(`Added “${skill}” to your resume's Skills. It's in every resume you generate from now on (use Tailor → Use for this job to refresh this one).`);
+  },
   reloadTab: async () => { await chrome.tabs.reload(S.tabInfo.id); setTimeout(loadJob, 1800); },
   openSearches: async () => {
     const links = AM.searchLinks(S.settings.prefs, S.profile).filter((l) => /LinkedIn|Naukri/.test(l.site)).slice(0, 8);
@@ -493,8 +509,11 @@ const ACT = {
     const run = (allFrames) => chrome.scripting.executeScript({ target: { tabId: S.tabInfo.id, allFrames }, func: (o) => (window.__AM_fill ? window.__AM_fill(o) : null), args: [fillOptions()] });
     let res;
     try { res = await run(true); } catch { res = await run(false); flash("Some embedded frames couldn't be reached; filled the main page."); }
-    const sum = { filled: 0, review: 0, missing: [], suggested: 0 };
-    for (const r of res) if (r.result) { sum.filled += r.result.filled; sum.review += r.result.review; sum.suggested += r.result.suggested || 0; sum.missing.push(...r.result.missing); }
+    const sum = { filled: 0, review: 0, missing: [], suggested: 0, unanswered: [] };
+    for (const r of res) if (r.result) {
+      sum.filled += r.result.filled; sum.review += r.result.review; sum.suggested += r.result.suggested || 0; sum.missing.push(...r.result.missing);
+      for (const u of r.result.unanswered || []) sum.unanswered.push({ ...u, frameId: r.frameId ?? 0 });
+    }
     S.lastFill = sum;
     if (!sum.filled && !sum.missing.length) flash("No fillable fields found on this page.", true);
     render();
@@ -510,14 +529,14 @@ const ACT = {
     const p = S.profile;
     const sc = AM.scoreJob(p, S.job, S.settings.prefs);
     const jd = (S.job.description || "").toLowerCase();
-    const hits = (b) => AM.findSkills(b).filter((s) => sc.matched.includes(s) || sc.missing.includes(s)).length + sc.ats.filter((k) => b.toLowerCase().includes(k)).length;
+    const hits = (b) => AM.findSkills(b).filter((s) => sc.matched.includes(s) || sc.missing.includes(s)).length;
     const skills = AM.splitList(p.skills).sort((a, b) => (sc.matched.includes(AM.canonSkill(b)) ? 1 : 0) - (sc.matched.includes(AM.canonSkill(a)) ? 1 : 0) || (jd.includes(b.toLowerCase()) ? 1 : 0) - (jd.includes(a.toLowerCase()) ? 1 : 0));
     S.tailor = {
       summary: p.summary,
       skills,
       experience: (p.experience || []).map((e) => [...(e.bullets || [])].sort((a, b) => hits(b) - hits(a))),
       projects: (p.projects || []).map((e) => [...(e.bullets || [])].sort((a, b) => hits(b) - hits(a))),
-      notes: [sc.missing.length ? `Job skills you haven't listed: ${sc.missing.join(", ")}. Add them only if you've really used them.` : "", sc.ats.length ? `Frequent JD words missing from your resume: ${sc.ats.slice(0, 8).join(", ")}` : ""].filter(Boolean),
+      notes: [sc.missing.length ? `Job skills you haven't listed: ${sc.missing.map(AM.skillLabel).join(", ")}. Use "+ Add" in Match only for ones you've really used.` : ""].filter(Boolean),
       sel: {},
     };
     render();
@@ -567,6 +586,12 @@ const ACT = {
       if (!extra.question) return flash("Paste the question first.", true);
       S.qa.q = extra.question;
     }
+    if (task === "questions") {
+      const list = (S.lastFill && S.lastFill.unanswered) || [];
+      if (!list.length) return flash("Press Fill form first: then the questions it couldn't answer are listed here.", true);
+      extra.questions = list.map((u) => ({ question: u.question, kind: u.kind, options: u.options, required: u.required }));
+      extra.targets = list.map((u) => ({ frameId: u.frameId, sig: u.sig }));
+    }
     if (task === "interview") { const a = S.apps.find((x) => x.id === t.dataset.app); extra.appId = a.id; job = jobFromApp(a); jobKey = a.jobKey || ""; }
     if (task === "outreach") {
       const c = S.contacts.find((x) => x.id === t.dataset.contact);
@@ -596,6 +621,31 @@ const ACT = {
     const text = $("#aiReply").value;
     if (!text.trim()) return flash("Paste the AI reply first.", true);
     const r = AI.parse(p.task, text, { profile: S.profile });
+    if (p.task === "questions") {
+      // send each answer back to the frame + field it belongs to; the page fills it and saves it to the answer bank
+      const byFrame = {};
+      for (const [n, ans] of Object.entries(r.answers)) {
+        const t = p.extra.targets[+n - 1];
+        if (!t) continue;
+        (byFrame[t.frameId] = byFrame[t.frameId] || {})[t.sig] = ans;
+      }
+      if (p.tabId) { try { await chrome.tabs.update(p.tabId, { active: true }); } catch {} }
+      let filled = 0, suggested = 0;
+      for (const [fid, map] of Object.entries(byFrame)) {
+        try {
+          const res = await chrome.scripting.executeScript({ target: { tabId: p.tabId, frameIds: [+fid] }, func: (m) => (window.__AM_applyAnswers ? window.__AM_applyAnswers(m) : null), args: [map] });
+          for (const x of res) if (x.result) { filled += x.result.filled; suggested += x.result.suggested; }
+        } catch {}
+      }
+      S.pending = null;
+      await chrome.storage.session.remove("aiPending");
+      S.tab = "job";
+      await loadJob();
+      if (S.lastFill) S.lastFill.unanswered = [];
+      render();
+      const skipped = p.extra.questions.length - Object.keys(r.answers).length;
+      return flash(`Filled ${filled} answer${filled === 1 ? "" : "s"} (amber: check them)${suggested ? `, ${suggested} chat answer suggested` : ""}${skipped > 0 ? `. ${skipped} skipped: your profile doesn't say` : ""}. Saved to your answer bank.`);
+    }
     const jsKey = "jobState:" + p.jobKey;
     const js = p.jobKey ? await AM.get(jsKey, {}) : {};
     if (p.task === "tailor") { js.tailor = r; S.tab = "job"; }

@@ -134,7 +134,7 @@
 
   const NATIVE = "input, textarea, select, [contenteditable='true']";
   // Custom widgets that aren't real form fields: Workday/MUI dropdown buttons, ARIA radio groups, chat-bot answer chips
-  const CUSTOM = 'button[aria-haspopup="listbox"], [aria-haspopup="listbox"]:not(input), [role="combobox"]:not(input), [role="radiogroup"], [class*="chatbot" i] [class*="chip" i]';
+  const CUSTOM = 'button[aria-haspopup="listbox"], [aria-haspopup="listbox"]:not(input), [role="combobox"]:not(input), [role="radiogroup"], [role="checkbox"]:not(input), [role="switch"]:not(input), [class*="chatbot" i] [class*="chip" i]';
   const ANY_FIELD = "input:not([type=hidden]),select,textarea,[contenteditable='true']," + CUSTOM;
   D.CUSTOM = CUSTOM;
 
@@ -211,14 +211,79 @@
       const question = labelText(el) || chatQuestion(el);
       return { el, kind: "ariaradio", question, descriptor: AM.norm(question), required: el.getAttribute("aria-required") === "true" || /\*\s*$/.test(question), group, options: group.map(txt), checked: group.some((g) => g.getAttribute("aria-checked") === "true") };
     }
+    if (role === "checkbox" || role === "switch") {
+      const grp = el.parentElement && el.closest('[role="group"]');
+      const sibs = grp ? [...grp.querySelectorAll('[role="checkbox"]:not(input)')].filter(D.visible) : [];
+      if (sibs.length > 1) {
+        // multi-select made of ARIA checkboxes ("Which of these have you used?")
+        if (seen.has(grp)) return null;
+        seen.add(grp);
+        const question = labelText(grp) || chatQuestion(grp);
+        return { el: grp, kind: "checkgroup", question, descriptor: AM.norm(question), required: grp.getAttribute("aria-required") === "true" || /\*\s*$/.test(question), group: sibs, options: sibs.map((s) => labelText(s) || txt(s)) };
+      }
+      const question = labelText(el) || txt(el);
+      if (/terms|privacy|consent|agree|policy|subscribe|newsletter|marketing/i.test(question)) return null;
+      return { el, kind: "ariacheck", question, descriptor: AM.norm(question), required: el.getAttribute("aria-required") === "true" };
+    }
     // dropdown trigger (Workday button, MUI div combobox)
-    if (el.querySelector("input, select")) return null; // wraps a real input: handled natively
+    if (el.querySelector("input:not([type=hidden]), select")) return null; // wraps a real input: handled natively
     if (el.disabled || el.getAttribute("aria-disabled") === "true") return null;
     const label = labelText(el);
     const current = txt(el);
     const question = cleanQ(label.replace(current, "")) || cleanQ(label);
     if (!question) return null;
     return { el, kind: "customselect", question, descriptor: AM.norm(question + " " + (el.getAttribute("data-automation-id") || "")), required: el.getAttribute("aria-required") === "true" || /required|\*/i.test(label), current: isEmptyText(current) ? "" : current };
+  }
+
+  // ---------- widgets with no ARIA at all ----------
+  const ACTION_WORDS = /\b(submit|next|continue|apply|save|cancel|back|upload|remove|delete|add|edit|close|sign|log ?in|search|browse|skip|clear|reset|download|share|view|show|more|less|send|done|ok)\b/i;
+  const PLACEHOLDER = /^(select|choose|pick|please select|--|—|select an option|select one)/i;
+  /** <div class="xyz-select">Select…▾</div> style dropdowns */
+  function plainDropdowns(taken) {
+    const out = [];
+    const cands = [...document.querySelectorAll('[class*="select" i]:not(select):not(option):not(input), [class*="dropdown" i]:not(select), [class*="picker" i]:not(input)')];
+    for (const el of cands) {
+      if (!D.visible(el) || /option|item|menu|list|value-container|placeholder|indicator|arrow|icon|single-value/i.test(el.className || "")) continue;
+      if (el.matches(CUSTOM) || el.closest(CUSTOM) || el.closest("nav, header, footer, select, [role=listbox], [role=menu]")) continue;
+      if (el.querySelector("input:not([type=hidden]), select, textarea, " + CUSTOM)) continue;
+      const t = txt(el);
+      if (t.length > 50 || t.includes("\n")) continue;
+      const cs = getComputedStyle(el);
+      const clickable = cs.cursor === "pointer" || el.tabIndex >= 0 || el.tagName === "BUTTON" || [...el.querySelectorAll("*")].some((c) => getComputedStyle(c).cursor === "pointer");
+      if (!clickable) continue;
+      if (out.some((o) => o.contains(el)) || taken.some((x) => x === el || x.contains(el) || el.contains(x))) continue;
+      for (let i = out.length - 1; i >= 0; i--) if (el.contains(out[i])) out.splice(i, 1); // keep the outermost control
+      out.push(el);
+    }
+    return out
+      .map((el) => {
+        const label = labelText(el);
+        const current = txt(el);
+        const question = cleanQ(label.replace(current, "")) || "";
+        if (!question || question.length < 3) return null;
+        return { el, kind: "customselect", question, descriptor: AM.norm(question), required: /\*|required/i.test(label), current: !current || PLACEHOLDER.test(current) ? "" : current, plain: true };
+      })
+      .filter(Boolean);
+  }
+  /** "Yes / No" (or "0-2 / 2-5 / 5+") rows made of plain buttons */
+  function buttonGroups(taken) {
+    const out = [];
+    const seen = new Set();
+    for (const b of document.querySelectorAll('button:not([type="submit"]), [role="button"]')) {
+      const p = b.parentElement;
+      if (!p || seen.has(p)) continue;
+      seen.add(p);
+      if (p.closest("nav, header, footer, form [type=submit], [role=toolbar], [role=tablist], [role=dialog] > footer") || p.closest(CUSTOM)) continue;
+      const btns = [...p.children].filter((c) => (c.matches('button:not([type="submit"]), [role="button"]')) && D.visible(c));
+      if (btns.length < 2 || btns.length > 8 || btns.length !== [...p.children].filter(D.visible).length) continue;
+      const texts = btns.map(txt);
+      if (texts.some((t) => !t || t.length > 30 || ACTION_WORDS.test(t))) continue;
+      if (taken.some((x) => x === p || p.contains(x))) continue;
+      const question = labelText(p) || chatQuestion(p);
+      if (!question || question.length < 4) continue;
+      out.push({ el: p, kind: "buttongroup", question, descriptor: AM.norm(question), required: /\*\s*$/.test(question), group: btns, options: texts });
+    }
+    return out;
   }
 
   function groupQuestion(el) {
@@ -278,7 +343,8 @@
         }
         const question = groupQuestion(el) || labelText(el);
         if (/terms|privacy|consent|agree to|policy/i.test(question)) continue;
-        fields.push({ el, kind, question, descriptor: AM.norm(question + " " + attrs), required: group.some((g) => g.required), group, options: group.map((g) => labelText(g) || g.value) });
+        // several checkboxes sharing a name = multi-select ("Which of these technologies…")
+        fields.push({ el, kind: kind === "checkbox" ? "checkgroup" : kind, question, descriptor: AM.norm(question + " " + attrs), required: group.some((g) => g.required), group, options: group.map((g) => labelText(g) || g.value) });
         continue;
       }
       const lt = labelText(el) || (el.isContentEditable ? chatQuestion(el) : "");
@@ -288,7 +354,15 @@
       if (kind === "select") f.options = [...el.options].map((o) => o.text.trim());
       fields.push(f);
     }
-    return fields;
+    // widgets with no ARIA: plain div dropdowns and Yes/No button rows
+    try {
+      const taken = fields.map((f) => f.el).concat(fields.flatMap((f) => f.group || []));
+      fields.push(...plainDropdowns(taken));
+      fields.push(...buttonGroups(fields.map((f) => f.el).concat(fields.flatMap((f) => f.group || []))));
+    } catch {}
+    // in a chat bot, the free-text box repeats the chip question: keep only the chips
+    const chipQs = new Set(fields.filter((f) => f.kind === "chips").map((f) => f.question));
+    return fields.filter((f) => !(f.kind === "textarea" && f.el.isContentEditable && chipQs.has(f.question)));
   };
 
   D.fieldSignature = (f) => AM.norm((f.question || "").slice(0, 80) + "|" + (f.el.name || f.el.id || ""));
