@@ -505,6 +505,11 @@ function renderSettings() {
     <button class="pri" data-act="openSearches">Open LinkedIn + Naukri (last 24h)</button>
     <details><summary class="small">All search links (${links.length})</summary><div class="list small" style="margin-top:6px">${links.map((l) => `<a target="_blank" href="${esc(l.url)}">${esc(l.site)}: ${esc(l.role)} · ${esc(l.loc)} ↗</a>`).join("")}</div></details>
   </div>
+  <div class="card stack"><h3>Exact PDF with Microsoft Word</h3>
+    <div class="small muted">When ApplyMate updates your Word resume, Microsoft Word on this PC makes the PDF, so it looks exactly like your Word file. Needs a one-time helper install (Windows, Word and Python).</div>
+    <div class="small">Status: <b>${S.wordHelper === "ok" ? '<span style="color:var(--ok)">connected ✓</span>' : S.wordHelper === "missing" ? '<span style="color:var(--warn)">not set up</span>' : S.wordHelper ? esc(S.wordHelper) : "not checked"}</b> <button class="sm" data-act="checkHelper">Check</button></div>
+    ${S.wordHelper !== "ok" ? `<ol class="small" style="margin:0;padding-left:18px"><li>Open the <b>native</b> folder inside your ApplyMate folder, double-click <b>install.bat</b>.</li><li>Paste this extension ID: <span class="kbd">${esc(chrome.runtime.id)}</span> <a href="#" data-act="copyExtId">copy</a></li><li>Press <b>Check</b>.</li></ol>` : ""}
+  </div>
   <div class="card stack"><h3>AI help (free, no API key)</h3>
     <div class="small muted">“✨ Copy AI prompt” copies a ready prompt (your profile + the job + strict “no made-up facts” rules) and opens your AI chat. Paste it there, then paste the reply back into ApplyMate. Used for resume tailoring, cover letters, screening answers, interview questions and referral messages.</div>
     <div class="grid2"><label class="f">Your AI chat<select data-bind="setField" data-k="aiSite">${Object.entries(AI.SITES).map(([k, v]) => opt(k, s.aiSite, v.label)).join("")}</select></label>
@@ -530,6 +535,18 @@ function renderSettings() {
 const ACT = {
   goTab: (t) => { S.tab = t.dataset.tab; render(); },
   reread: () => loadJob(),
+  checkHelper: async () => {
+    S.wordHelper = await new Promise((resolve) => {
+      let port;
+      try { port = chrome.runtime.connectNative("com.applymate.word"); } catch { return resolve("missing"); }
+      const t = setTimeout(() => { try { port.disconnect(); } catch {} resolve("no answer"); }, 8000);
+      port.onMessage.addListener((m) => { clearTimeout(t); port.disconnect(); resolve(m && m.ok ? "ok" : "error"); });
+      port.onDisconnect.addListener(() => { clearTimeout(t); const e = chrome.runtime.lastError && chrome.runtime.lastError.message; resolve(/not found|forbidden|specified native/i.test(e || "") ? "missing" : e || "missing"); });
+      port.postMessage({ action: "ping" });
+    });
+    render();
+  },
+  copyExtId: async () => { await navigator.clipboard.writeText(chrome.runtime.id); flash("Extension ID copied"); },
   addSkill: async (t) => {
     const skill = t.dataset.skill;
     const list = AM.splitList(S.profile.skills);

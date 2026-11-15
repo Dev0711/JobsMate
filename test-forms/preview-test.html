@@ -38,6 +38,11 @@
     await chrome.storage.local.set({ "file:t1": { name: f, type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", data: btoa(s) } });
     await chrome.storage.session.set({ resumePreview: { docxFileId: "t1", baseName: f.replace(/\.docx$/, ""), changes: res.changes } });
     await import("/preview/preview.js");
+    if (new URLSearchParams(location.search).get("approx")) {
+      await new Promise((r) => { const t = setInterval(() => window.__AM_previewReady && window.__AM_approx && (clearInterval(t), r()), 50); });
+      await window.__AM_approx();
+      document.title = "READY";
+    }
   </script>
 </body>
 </html>

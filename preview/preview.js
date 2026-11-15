@@ -20,55 +20,62 @@ function download(bytes, type, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 
-/** Page size and margins come from the Word file, so the PDF paginates like your document. */
+/** Print each rendered Word page as one PDF page of the same size, without changing its layout. */
 function pageCss() {
   const sec = document.querySelector("#render section.docx");
   if (!sec) return;
   const cs = sec.style;
   const w = cs.width || "21cm", h = cs.minHeight || cs.height || "29.7cm";
-  const pad = [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map((x) => x || "0.75in").join(" ");
-  $("#pageStyle").textContent = `@page { size: ${w} ${h}; margin: ${pad}; }`;
+  $("#pageStyle").textContent = `@page { size: ${w} ${h}; margin: 0; }`;
 }
 
-/** Chrome's real print-to-PDF via the DevTools protocol (needs the optional "debugger" permission, asked once). */
-async function chromePdf() {
-  const tab = await chrome.tabs.getCurrent();
-  const target = { tabId: tab.id };
-  await chrome.debugger.attach(target, "1.3");
-  try {
-    const res = await chrome.debugger.sendCommand(target, "Page.printToPDF", { printBackground: true, preferCSSPageSize: true, generateDocumentOutline: false });
-    return b64ToBytes(res.data);
-  } finally {
-    await chrome.debugger.detach(target).catch(() => {});
-  }
+/** Exact PDF: Microsoft Word itself converts the file, through the ApplyMate Word helper (native messaging). */
+function wordPdf(docxB64) {
+  return new Promise((resolve, reject) => {
+    let port;
+    try { port = chrome.runtime.connectNative("com.applymate.word"); } catch (e) { return reject(new Error("helper-missing")); }
+    const parts = [];
+    let done = false;
+    port.onMessage.addListener((m) => {
+      if (!m.ok) { done = true; port.disconnect(); return reject(new Error(m.error || "Word couldn't convert the file")); }
+      parts[m.index] = m.data;
+      if (parts.filter((x) => x !== undefined).length === m.total) { done = true; port.disconnect(); resolve(b64ToBytes(parts.join(""))); }
+    });
+    port.onDisconnect.addListener(() => {
+      if (done) return;
+      const err = chrome.runtime.lastError && chrome.runtime.lastError.message;
+      reject(new Error(/not found|forbidden|specified native messaging host/i.test(err || "") ? "helper-missing" : err || "The Word helper stopped unexpectedly"));
+    });
+    port.postMessage({ action: "docx2pdf", data: docxB64 });
+  });
 }
 
 async function build() {
-  if (!(await chrome.permissions.contains({ permissions: ["debugger"] }))) {
-    status(`<b>One-time permission needed.</b><br>To turn your Word resume into a PDF exactly as Chrome prints it, ApplyMate needs Chrome's “debugger” access for this page.
-      While it runs (about a second) Chrome shows a “started debugging this browser” bar; that's this conversion.<br><br>
-      <button class="pri" id="grant">Allow and create PDF</button> <button id="printInstead">Use Chrome's print dialog instead</button>`);
-    $("#grant").onclick = async () => {
-      const ok = await chrome.permissions.request({ permissions: ["debugger"] }).catch(() => false);
-      ok ? make() : printFallback("Permission wasn't granted.");
-    };
-    $("#printInstead").onclick = () => printFallback();
-    return;
-  }
-  make();
-}
-
-async function make() {
-  status("Creating your PDF…");
+  status("Microsoft Word is creating your PDF… (about 5-10 seconds)");
   try {
-    pdfBytes = await chromePdf();
-    showPdf();
+    const rec = await AM.get("file:" + job.docxFileId);
+    pdfBytes = await wordPdf(rec.data);
+    showPdf("Made by Microsoft Word: exactly how Word prints your resume.");
   } catch (e) {
-    printFallback("Automatic PDF creation didn't work here (" + (e.message || e) + ").");
+    if (e.message === "helper-missing") {
+      status(`<b>For an exact PDF, set up the ApplyMate Word helper once.</b> It lets Microsoft Word on this PC make the PDF, so it matches your Word file exactly.<br>
+        <ol style="margin:8px 0 8px 18px;padding:0"><li>Open the <b>native</b> folder inside your ApplyMate folder and double-click <b>install.bat</b>.</li>
+        <li>Paste this extension ID when asked: <code id="extId">${chrome.runtime.id}</code> <button id="copyId">Copy</button></li>
+        <li>Come back here and press <b>Try again</b>.</li></ol>
+        <button class="pri" id="retry">Try again</button> <button id="approx">Use the quick preview instead (approximate)</button>`);
+      $("#copyId").onclick = () => navigator.clipboard.writeText(chrome.runtime.id).catch(() => {});
+      $("#retry").onclick = () => build();
+      $("#approx").onclick = () => printFallback();
+    } else {
+      status(`Word couldn't make the PDF: ${AM.esc(e.message)}<br><br><button class="pri" id="retry">Try again</button> <button id="approx">Use the quick preview instead (approximate)</button>`, true);
+      $("#retry").onclick = () => build();
+      $("#approx").onclick = () => printFallback();
+    }
   }
 }
 
-function showPdf() {
+function showPdf(note = "") {
+  if (note) $("#fileName").textContent = job.baseName + " (updated) · " + note;
   pdfUrl && URL.revokeObjectURL(pdfUrl);
   pdfUrl = URL.createObjectURL(new Blob([pdfBytes], { type: "application/pdf" }));
   $("#status").hidden = true;
@@ -78,10 +85,32 @@ function showPdf() {
   $("#dlPdf").disabled = false;
 }
 
-function printFallback(why = "") {
+/** Approximate path (no Word helper): browser render of the Word file → Chrome's print dialog (Save as PDF). */
+async function printFallback(why = "") {
+  await ensureRendered();
   $("#render").classList.add("showing");
-  status(`${why ? why + "<br>" : ""}Use Chrome's print dialog: it shows the PDF preview. Choose <b>Save as PDF</b> → Save, then upload that PDF in ApplyMate → Profile.<br><br><button class="pri" id="doPrint">Open print / Save as PDF</button>`);
+  status(`${why ? why + "<br>" : ""}<b>Quick preview (approximate).</b> This is a browser rendering of your Word file; spacing can differ slightly from Word. For an exact PDF, set up the Word helper.<br>
+    To save it: <b>Print / Save as PDF</b> → Destination “Save as PDF” → Save, then upload that PDF in ApplyMate → Profile.<br><br><button class="pri" id="doPrint">Print / Save as PDF</button>`);
   $("#doPrint").onclick = () => window.print();
+}
+
+let rendered = false;
+async function ensureRendered() {
+  if (rendered) return;
+  const rec = await AM.get("file:" + job.docxFileId);
+  const docx = b64ToBytes(rec.data);
+  // keep Word's own page breaks and layout; don't reflow anything for print
+  await renderAsync(docx.buffer, $("#render"), null, { className: "docx", inWrapper: true, breakPages: true, ignoreLastRenderedPageBreak: false, renderHeaders: true, renderFooters: true, experimental: true, ignoreWidth: false, ignoreHeight: false });
+  // Latin-only resume: never let stray right-to-left settings in the file flip the text
+  if (!/[֐-ࣿ]/.test(job.text || $("#render").innerText)) {
+    const st = document.createElement("style");
+    st.textContent = "#render, #render * { direction: ltr !important; unicode-bidi: normal !important; }";
+    document.head.appendChild(st);
+  }
+  pageCss();
+  await document.fonts.ready;
+  await sleep(150);
+  rendered = true;
 }
 
 async function init() {
@@ -93,12 +122,8 @@ async function init() {
   $("#changes").innerHTML = job.changes.length
     ? job.changes.map((c) => `<span class="chip">+ ${AM.esc(c.skill)} → ${AM.esc(c.label)}</span>`).join("")
     : `<span class="muted">No new skills (they're already on your resume)</span>`;
-  const docx = b64ToBytes(rec.data);
-  await renderAsync(docx.buffer, $("#render"), null, { className: "docx", inWrapper: true, breakPages: true, ignoreLastRenderedPageBreak: true, renderHeaders: true, renderFooters: true, experimental: true });
-  pageCss();
-  await document.fonts.ready;
-  await sleep(150);
   window.__AM_previewReady = true;
+  window.__AM_approx = printFallback; // used by the test page
   build();
 }
 

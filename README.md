@@ -20,49 +20,18 @@ Fills job application forms, remembers your answers, scores jobs against your re
 ### Updating your own resume (Word → PDF)
 1. Upload your **Word resume (.docx)** in **Profile → Resume**. ApplyMate finds your skill lines, such as *Frontend / Backend / DevOps*. Lines can be written as "Label: items", as a two-column table, or as a label with the list underneath.
 2. **+ Add** on a job queues the skill. **Update my resume** shows the line it proposes ("Next.js → Frontend", "Kubernetes → DevOps") with the reason, and you can pick a different line. Skills already on your resume are skipped.
-3. **Preview final PDF** adds the skills to the end of those lines in **your** formatting (same font, size and colour as the neighbouring text), turns the document into a PDF with Chrome's own print engine, and shows you **that PDF**. The text is real text, so ATS systems can read it.
+3. **Preview final PDF** adds the skills to the end of those lines in **your** formatting: same font, size and colour, and the line's own separator (comma, `|`, `•` …). Then it shows you the final PDF.
 4. **Use this PDF as my resume** makes it the file attached to applications and keeps the edited Word file as the source for next time. **Download PDF** and **Download Word** are there too. Your original file is never changed.
-   - The first time, Chrome asks for a one-time permission for the PDF step. While it runs (about a second), Chrome shows a "started debugging this browser" bar. If you'd rather not allow it, the page falls back to Chrome's print dialog: choose **Save as PDF**, then upload that PDF.
-   - Suggestions are real technical skills only, never page words like "remote" or "posted".
-3. **Tailor.** Under **Tailor resume**, use **Quick tailor** (offline) or **✨ Copy AI prompt**:
-   - The prompt (your profile, the job and strict "no invented facts" rules) is copied, and your AI chat opens in a new tab.
-   - Paste it there (Ctrl+V), copy the whole reply, and paste it into the box at the top of the panel.
-   - ApplyMate shows each change for you to approve, then builds a job-specific PDF or DOCX.
-   - **Cover letter**, **screening answers**, **interview questions** and **referral messages** work the same way.
-4. **Apply.** Click **Fill form**, the floating **Fill** button, or press `Alt+Shift+F`.
-   - Green: filled.
-   - Amber: please check (usually reused answers).
-   - Red: required and left for you.
-   - Works inside iframes too (company sites that embed Greenhouse or Lever).
-   - Every field is attempted, required and optional. Questions your profile doesn't cover are worked out where possible:
-     - "Do you have experience with Kafka?" → Yes or No from your skills.
-     - "Years with React?" → your experience.
-     - "Can you join in 30 days?" → your notice period.
-     - "Which of these technologies…" → ticks the ones you know.
-   - Anything left is marked **red** (required) or **blue dashed** (optional) and listed in the panel.
-   - **✨ Answer the rest with AI** sends all of those questions in one prompt. The answers you paste back are filled in and saved, so next time they fill automatically.
-   - Dropdowns of every common kind:
-     - normal dropdowns, radio buttons and checkboxes;
-     - Workday and MUI-style button dropdowns, using the popup's search box for long lists like Country;
-     - type-to-search location and skill pickers;
-     - ARIA radio groups;
-     - plain div dropdowns with no ARIA at all;
-     - Yes/No button rows;
-     - multi-select checkboxes;
-     - custom switches;
-     - skill tag pickers;
-     - DD/MM/YYYY dates.
-   - Naukri-style chatbot questions: ApplyMate **outlines** the suggested answer chip, and you click it, because a chip sends the answer immediately.
-5. **Teach it.** Answers you type are saved to the **Answers** bank and reused next time. Right-click a field and choose **ApplyMate: this field is…** to fix a mapping on that site for good.
-6. **Track.**
-   - After you submit a form ApplyMate filled, it asks whether to mark the job as applied.
-   - One-click applies on Naukri and LinkedIn Easy Apply are logged automatically, with Undo.
-   - Follow-up reminders default to 7 days, and the toolbar badge shows how many are overdue.
-7. **Referrals.**
-   - **Referrals & HR** opens LinkedIn searches for recruiters, engineers, alumni from your college and ex-colleagues at that company.
-   - On a LinkedIn profile, right-click and choose **ApplyMate: save this person**.
-   - Draft a connection note, referral request or HR note, send it yourself, then press **I sent it** to get a 5-day follow-up reminder.
-8. **Recruiter called?** Go to **Tracker** and use **+ Recruiter call**. Add interview rounds to get reminders 24 hours before each one, and keep prep notes per application.
+
+### Exact PDF with Microsoft Word (recommended, one-time setup)
+For a PDF identical to what Word produces, ApplyMate uses **Microsoft Word on your PC** through a small local helper. It works on Windows and needs Word and Python 3.
+1. Open the `native` folder and double-click **`install.bat`**.
+2. Paste the extension ID shown in **ApplyMate → Settings → Exact PDF with Microsoft Word**.
+3. Press **Check** in Settings: it should say *connected ✓*.
+
+The helper runs only when you click Preview. It opens the edited resume in Word read-only and invisibly, saves it as a PDF, and returns it. It never closes a Word window you have open. `uninstall.bat` removes it.
+
+Without the helper, the preview falls back to a quick in-browser rendering. That one is **approximate**: spacing and right-aligned dates can differ from Word. Save it via the print dialog with **Save as PDF**.
 
 ## Notes and limits
 - Site layouts change. If a site stops filling well, the generic engine plus right-click mapping usually covers it. Workday's multi-step forms are best-effort, one page at a time.

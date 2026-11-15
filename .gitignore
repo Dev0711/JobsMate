@@ -1,1 +1,4 @@
 .claude/
+native/host.bat
+native/com.applymate.word.json
+native/__pycache__/

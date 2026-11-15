@@ -28,6 +28,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   html, body { background: #fff !important; height: auto; display: block; }
   #render { position: static !important; left: 0; padding: 0 !important; }
   #render .docx-wrapper { background: none !important; padding: 0 !important; display: block !important; }
-  #render section.docx { box-shadow: none !important; margin: 0 !important; padding: 0 !important; width: auto !important; min-height: 0 !important; break-after: page; }
+  /* keep the page exactly as rendered (same width and margins) so tab stops and wrapping don't move */
+  #render section.docx { box-shadow: none !important; margin: 0 !important; break-after: page; overflow: hidden; }
   #render section.docx:last-of-type { break-after: auto; }
 }
