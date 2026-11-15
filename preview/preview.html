@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Resume PDF preview</title>
+  <link rel="stylesheet" href="preview.css">
+  <style id="pageStyle"></style>
+</head>
+<body>
+  <header class="bar no-print">
+    <div class="title"><span class="logo">AM</span> <b>Updated resume</b> <span id="fileName" class="muted"></span></div>
+    <div id="changes" class="changes"></div>
+    <div class="actions">
+      <button id="useBtn" class="pri" disabled>Use this PDF as my resume</button>
+      <button id="dlPdf" disabled>Download PDF</button>
+      <button id="dlDocx">Download Word</button>
+      <button id="closeBtn" class="ghost">Discard</button>
+    </div>
+  </header>
+  <main class="no-print" id="status"><div class="msg">Building your PDF…</div></main>
+  <iframe id="pdfView" class="no-print" title="PDF preview" hidden></iframe>
+  <!-- the edited Word document is rendered here and printed to PDF; you see the PDF, not this -->
+  <div id="render"></div>
+  <script src="../lib/common.js"></script>
+  <script type="module" src="preview.js"></script>
+</body>
+</html>

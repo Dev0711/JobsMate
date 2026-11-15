@@ -15,7 +15,14 @@ Fills job application forms, remembers your answers, scores jobs against your re
 ## Daily flow
 1. **Find jobs.** Click **Today's searches** to open LinkedIn and Naukri searches filtered to the last 24 hours, or browse any careers page.
 2. **Judge fit.** Open a posting. The **This job** tab shows a match score, the skills you have, red flags (experience, location, notice period, pay), and the job's key requirements, each marked ✓ or ✗.
-   - Skills the job asks for that aren't on your resume each get a **+ Add** button, which puts them in your resume's Skills section. Add only what you've really used.
+   - Skills the job asks for that aren't on your resume each get a **+ Add** button. Add only what you've really used.
+
+### Updating your own resume (Word → PDF)
+1. Upload your **Word resume (.docx)** in **Profile → Resume**. ApplyMate finds your skill lines, such as *Frontend / Backend / DevOps*. Lines can be written as "Label: items", as a two-column table, or as a label with the list underneath.
+2. **+ Add** on a job queues the skill. **Update my resume** shows the line it proposes ("Next.js → Frontend", "Kubernetes → DevOps") with the reason, and you can pick a different line. Skills already on your resume are skipped.
+3. **Preview final PDF** adds the skills to the end of those lines in **your** formatting (same font, size and colour as the neighbouring text), turns the document into a PDF with Chrome's own print engine, and shows you **that PDF**. The text is real text, so ATS systems can read it.
+4. **Use this PDF as my resume** makes it the file attached to applications and keeps the edited Word file as the source for next time. **Download PDF** and **Download Word** are there too. Your original file is never changed.
+   - The first time, Chrome asks for a one-time permission for the PDF step. While it runs (about a second), Chrome shows a "started debugging this browser" bar. If you'd rather not allow it, the page falls back to Chrome's print dialog: choose **Save as PDF**, then upload that PDF.
    - Suggestions are real technical skills only, never page words like "remote" or "posted".
 3. **Tailor.** Under **Tailor resume**, use **Quick tailor** (offline) or **✨ Copy AI prompt**:
    - The prompt (your profile, the job and strict "no invented facts" rules) is copied, and your AI chat opens in a new tab.
@@ -65,5 +72,5 @@ Fills job application forms, remembers your answers, scores jobs against your re
 - If your Chrome has its built-in on-device AI (Gemini Nano), ApplyMate uses it automatically for short factual answers and key-requirement extraction. Settings shows whether it's available; on most laptops it isn't, and that's fine.
 
 ## Development
-- No build step. The vendored libraries in `lib/vendor/` are pdf.js 4.10.38, plus one bundle of jsPDF 2.5.2 and docx 9.0.3.
-- `test-forms/` has local test pages (Greenhouse-like, React-controlled, an iframe on a company page, custom dropdowns / chatbot chips, mixed screening questions) and `panel.html`, a harness that runs the side panel next to a test page. To use them, serve the folder with `python -m http.server 8765` and open `http://localhost:8765/test-forms/panel.html`. You can delete this folder; the extension doesn't use it.
+- No build step. The vendored libraries in `lib/vendor/` are pdf.js 4.10.38, plus one bundle of jsPDF 2.5.2 and docx 9.0.3, and `docx-tools.js` (docx-preview 0.4.1 + JSZip 3.10.2) for reading, editing and rendering Word files.
+- `test-forms/` has local test pages (Greenhouse-like, React-controlled, an iframe on a company page, custom dropdowns / chatbot chips, mixed screening questions), `resumes/` (sample Word resumes), `docx-test.html` and `preview-test.html` (resume editing and PDF tests) and `panel.html`, a harness that runs the side panel next to a test page. To use them, serve the folder with `python -m http.server 8765` and open `http://localhost:8765/test-forms/panel.html`. You can delete this folder; the extension doesn't use it.

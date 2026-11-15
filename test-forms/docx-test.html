@@ -1,0 +1,31 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Word resume editing test</title>
+<script src="/test-forms/shim.js"></script>
+<script src="/lib/common.js"></script>
+</head><body>
+<h1>Word resume editing test</h1>
+<p>Run from the console: <code>await window.__run()</code>. Edits each sample resume in test-forms/resumes/ and reports where skills went.</p>
+<pre id="out"></pre>
+<script type="module">
+import { inspectDocx, addSkills, loadDocx, paraText } from "/lib/resumedocx.js";
+window.__docx = { inspectDocx, addSkills, loadDocx, paraText };
+window.__run = async (files = ["resume-label-lines.docx", "resume-table.docx", "resume-stacked.docx"], skills = ["Next.js", "GraphQL", "Kubernetes", "MongoDB", "Jest", "React"]) => {
+  const out = {};
+  for (const f of files) {
+    const buf = await (await fetch("/test-forms/resumes/" + f)).arrayBuffer();
+    const info = await inspectDocx(buf);
+    const additions = [], asks = [];
+    for (const s of skills) {
+      const r = AM.placeSkill(s, info.lines);
+      if (r) additions.push({ skill: s, lineIndex: r.index }); else asks.push(s);
+    }
+    const res = await addSkills(buf, additions);
+    const after = await inspectDocx(res.buffer.buffer.slice(res.buffer.byteOffset, res.buffer.byteOffset + res.buffer.byteLength));
+    out[f] = { before: info.lines.map((l) => `${l.label}: ${l.items.join(l.sep.trim() === "|" ? " | " : ", ")}`), changes: res.changes.map((c) => `${c.skill} → ${c.label}`), askUser: asks, after: after.lines.map((l) => `${l.label}: ${l.items.join(", ")}`) };
+  }
+  document.getElementById("out").textContent = JSON.stringify(out, null, 1);
+  return out;
+};
+window.__ready = true;
+</script>
+</body></html>

@@ -1,4 +1,5 @@
 import * as AI from "../lib/ai.js";
+import { inspectDocx, addSkills } from "../lib/resumedocx.js";
 import { pdfText, heuristicParse } from "../lib/resume.js";
 import { resumeData, resumePdf, resumeDocx, letterPdf, pdfBase64, download } from "../lib/docs.js";
 
@@ -37,6 +38,15 @@ async function loadData() {
   [S.profile, S.settings, S.apps, S.answers, S.contacts, S.files] = await Promise.all([
     AM.getProfile(), AM.getSettings(), AM.getApps(), AM.get("answers", []), AM.get("contacts", []), AM.get("files", []),
   ]);
+  S.queue = await AM.get("resumeQueue", []);
+  // your Word resume: which skill lines it has (Frontend / Backend / DevOps …)
+  if (S.profile.sourceDocxId && (!S.docx || S.docx.id !== S.profile.sourceDocxId)) {
+    try {
+      const rec = await AM.get("file:" + S.profile.sourceDocxId);
+      S.docx = rec ? { id: S.profile.sourceDocxId, name: rec.name, ...(await inspectDocx(await b64ToBlob(rec.data, rec.type).arrayBuffer())) } : null;
+    } catch (e) { S.docx = { id: S.profile.sourceDocxId, error: e.message, lines: [], text: "" }; }
+  }
+  if (!S.profile.sourceDocxId) S.docx = null;
   const overdue = S.apps.filter(AM.isOverdue).length;
   const b = $("#overdueBadge");
   b.hidden = !overdue;
@@ -197,6 +207,7 @@ function renderJob() {
     ${nano && !S.keywords ? `<button class="sm" data-act="nanoKeywords">Extract key requirements (on-device AI)</button>` : ""}
     ${S.keywords ? `<div><span class="small muted">Key requirements:</span> ${S.keywords.map((s) => `<span class="chip">${esc(s)}</span>`).join("")}</div>` : ""}
   </div>` : ""}
+  ${renderResumeUpdate(true)}
 
   <div class="card stack">
     <details ${S.tailor ? "open" : ""}><summary>Tailor resume to this job</summary><div class="stack">${renderTailor(sc)}</div></details>
@@ -431,12 +442,42 @@ function renderRepeat(kind, fields) {
     <button class="sm danger" data-act="repDel" data-kind="${kind}" data-i="${i}">Remove</button></div>`).join("")}
     <button class="sm" data-act="repAdd" data-kind="${kind}">+ Add</button>`;
 }
+/** "Update my resume": skills queued for YOUR Word resume, the line each goes on, and Preview final PDF. */
+function renderResumeUpdate(compact = false) {
+  if (!S.queue.length && compact) return "";
+  if (!S.docx) {
+    if (!S.queue.length) return "";
+    return `<div class="card stack" style="border-color:var(--accent)"><h3>Update my resume</h3>
+      <div class="small">${S.queue.length} skill${S.queue.length > 1 ? "s" : ""} waiting: ${S.queue.map((q) => esc(q.skill)).join(", ")}.</div>
+      <div class="small muted">Upload your <b>Word (.docx)</b> resume in Profile → Resume so ApplyMate can put them on the right line of your own resume.</div>
+      ${compact ? `<a href="#" data-act="goTab" data-tab="profile" class="small">Go to Profile →</a>` : ""}</div>`;
+  }
+  if (S.docx.error) return `<div class="card small" style="border-color:var(--bad)">Couldn't read your Word resume: ${esc(S.docx.error)}</div>`;
+  const lines = S.docx.lines;
+  if (!lines.length) return `<div class="card stack"><h3>Update my resume</h3><div class="small">Couldn't find a Skills section in <b>${esc(S.docx.name)}</b>. Its heading should be something like “Skills” or “Technical Skills”.</div></div>`;
+  const rows = S.queue.map((q, i) => {
+    const auto = AM.placeSkill(q.skill, lines);
+    const chosen = q.line !== null && q.line !== undefined && q.line !== "" ? +q.line : auto ? auto.index : "";
+    return `<div class="row small" style="align-items:center"><b style="min-width:80px">${esc(q.skill)}</b> →
+      <select data-bind="queueLine" data-i="${i}" style="width:auto;flex:1">${chosen === "" ? `<option value="" selected>Choose a line…</option>` : ""}${lines.map((l, li) => opt(li, chosen, `${l.label}: ${l.items.slice(0, 3).join(", ")}${l.items.length > 3 ? "…" : ""}`)).join("")}</select>
+      <button class="sm danger" data-act="queueRemove" data-i="${i}" title="Remove">✕</button></div>
+      ${auto && q.line === null ? `<div class="small muted" style="margin:-4px 0 4px 86px">${esc(auto.reason)}</div>` : ""}`;
+  }).join("");
+  return `<div class="card stack" style="border-color:var(--accent)"><h3>Update my resume</h3>
+    <div class="small muted">Edits <b>${esc(S.docx.name)}</b>: adds each skill to the end of the chosen line, in your own formatting. The original file isn't changed.</div>
+    ${rows || `<div class="small muted">No skills queued. Use “+ Add” on a job's Match card, or add one here.</div>`}
+    ${compact ? "" : `<div class="row"><input id="queueNew" placeholder="Add a skill, e.g. Kubernetes" style="flex:1;width:auto"><button class="sm" data-act="queueAdd">Add</button></div>`}
+    ${S.queue.length ? `<button class="pri" data-act="previewResume">Preview final PDF</button>` : ""}
+  </div>`;
+}
+
 function renderProfile() {
   const p = S.profile;
   const files = S.files;
-  return `<div class="card stack"><h3>Resume</h3>
-    <label class="btn" style="text-align:center">Upload resume PDF<input type="file" accept="application/pdf" id="resumeUpload" hidden></label>
-    ${files.length ? `<div class="list">${files.map((f) => `<div class="row small"><input type="radio" name="defres" data-bind="defaultResume" value="${f.id}" ${p.defaultResumeId === f.id ? "checked" : ""} ${f.kind === "cover" ? "disabled" : ""} title="Default resume"><span class="grow">${f.kind === "tailored" ? "✦ " : f.kind === "cover" ? "✉ " : ""}${esc(f.name)}</span><button class="sm" data-act="dlFile" data-id="${f.id}">↓</button><button class="sm danger" data-act="delFile" data-id="${f.id}">✕</button></div>`).join("")}</div><div class="small muted">● = default resume attached to forms. ✦ = tailored versions.</div>` : ""}
+  return `${renderResumeUpdate()}<div class="card stack"><h3>Resume</h3>
+    <label class="btn" style="text-align:center">Upload resume (PDF or Word .docx)<input type="file" accept="application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" id="resumeUpload" hidden></label>
+    <div class="small muted">Upload your <b>Word (.docx)</b> version too: then ApplyMate can add skills into <b>your own</b> resume, on the right line, and make the PDF.</div>
+    ${files.length ? `<div class="list">${files.map((f) => `<div class="row small"><input type="radio" name="defres" data-bind="defaultResume" value="${f.id}" ${p.defaultResumeId === f.id ? "checked" : ""} ${f.kind === "cover" || f.kind === "resume-docx" ? "disabled" : ""} title="Default resume"><span class="grow">${f.kind === "tailored" ? "✦ " : f.kind === "cover" ? "✉ " : f.kind === "resume-docx" ? "📝 " : ""}${esc(f.name)}${f.id === p.sourceDocxId ? ' <span class="muted">(source for edits)</span>' : ""}</span><button class="sm" data-act="dlFile" data-id="${f.id}">↓</button><button class="sm danger" data-act="delFile" data-id="${f.id}">✕</button></div>`).join("")}</div><div class="small muted">● = default resume attached to forms. ✦ = tailored versions.</div>` : ""}
   </div>
   ${GROUPS.map(([g, keys]) => `<div class="card stack"><h3>${g}</h3><div class="grid2">${keys.map(profileInput).join("")}</div></div>`).join("")}
   <div class="card stack"><h3>Skills & summary</h3>
@@ -496,8 +537,38 @@ const ACT = {
     S.profile.skills = list.join(", ");
     await AM.set("profile", S.profile);
     if (S.tailor && Array.isArray(S.tailor.skills) && !S.tailor.skills.includes(skill)) S.tailor.skills.push(skill);
+    // queue it for YOUR resume file
+    if (!S.queue.some((q) => q.skill.toLowerCase() === skill.toLowerCase())) S.queue.push({ skill, line: null });
+    await AM.set("resumeQueue", S.queue);
     render();
-    flash(`Added “${skill}” to your resume's Skills. It's in every resume you generate from now on (use Tailor → Use for this job to refresh this one).`);
+    flash(S.docx ? `“${skill}” queued for your resume. Review where it goes in “Update my resume”, then preview the PDF.` : `“${skill}” added. Upload your Word resume (.docx) in Profile so ApplyMate can add it to your real resume.`);
+  },
+  queueRemove: async (t) => { S.queue.splice(+t.dataset.i, 1); await AM.set("resumeQueue", S.queue); render(); },
+  queueAdd: async () => {
+    const v = ($("#queueNew") || {}).value?.trim();
+    if (!v) return;
+    S.queue.push({ skill: v, line: null });
+    await AM.set("resumeQueue", S.queue);
+    render();
+  },
+  previewResume: async () => {
+    if (!S.docx || !S.docx.lines.length) return flash("Upload your Word resume first.", true);
+    const additions = [];
+    for (const q of S.queue) {
+      const idx = q.line !== null && q.line !== undefined && q.line !== "" ? +q.line : (AM.placeSkill(q.skill, S.docx.lines) || {}).index;
+      if (idx === undefined || idx === null || isNaN(idx)) return flash(`Choose a line for “${q.skill}” first.`, true);
+      additions.push({ skill: q.skill, lineIndex: idx });
+    }
+    const rec = await AM.get("file:" + S.docx.id);
+    const { buffer, changes } = await addSkills(await b64ToBlob(rec.data, rec.type).arrayBuffer(), additions);
+    // one draft slot: replace the previous preview draft
+    const old = await chrome.storage.session.get("resumePreview");
+    if (old.resumePreview) await chrome.storage.local.remove("file:" + old.resumePreview.docxFileId);
+    const draftId = "draft_" + AM.uid();
+    await AM.set("file:" + draftId, { name: rec.name, type: rec.type, data: await blobToB64(new Blob([buffer])) });
+    const text = (await inspectDocx(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength))).text;
+    await chrome.storage.session.set({ resumePreview: { docxFileId: draftId, baseName: rec.name.replace(/\.docx$/i, "").replace(/\s*\(updated\)$/i, ""), changes, text } });
+    await chrome.tabs.create({ url: chrome.runtime.getURL("preview/preview.html") });
   },
   reloadTab: async () => { await chrome.tabs.reload(S.tabInfo.id); setTimeout(loadJob, 1800); },
   openSearches: async () => {
@@ -832,6 +903,7 @@ const BIND = {
   ansField: async (t) => { const a = S.answers.find((x) => x.id === t.dataset.id); a[t.dataset.k] = t.value; a.updatedAt = AM.today(); await AM.set("answers", S.answers); },
   profileField: (t) => { S.profile[t.dataset.k] = t.dataset.type === "bool" ? t.value === "true" : t.value; saveProfile(); },
   rep: (t) => { const it = S.profile[t.dataset.kind][+t.dataset.i]; it[t.dataset.k] = t.dataset.k === "bullets" ? t.value.split("\n").map((s) => s.trim()).filter(Boolean) : t.value; saveProfile(); },
+  queueLine: async (t) => { S.queue[+t.dataset.i].line = t.value === "" ? null : +t.value; await AM.set("resumeQueue", S.queue); render(); },
   defaultResume: async (t) => { S.profile.defaultResumeId = t.value; await AM.set("profile", S.profile); if (S.job) await syncFillOptions(); },
   prefField: async (t) => { S.settings.prefs[t.dataset.k] = t.dataset.type === "bool" ? t.value === "true" : t.value; await AM.saveSettings({ prefs: S.settings.prefs }); },
   setField: async (t) => {
@@ -895,6 +967,26 @@ document.addEventListener("change", async (e) => {
     try {
       const buf = await file.arrayBuffer();
       const b64 = await blobToB64(file);
+      const isDocx = /\.docx$/i.test(file.name);
+      if (isDocx) {
+        // your editable source resume
+        const info = await inspectDocx(buf);
+        const id = await saveFile(file.name, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", b64, "resume-docx");
+        const p = S.profile;
+        const parsed = heuristicParse(info.text);
+        for (const [k, v] of Object.entries(parsed)) {
+          if (Array.isArray(v)) { if (!(p[k] || []).length && v.length) p[k] = v; }
+          else if (v && !p[k]) p[k] = v;
+        }
+        if (!p.resumeText) p.resumeText = info.text;
+        p.sourceDocxId = id;
+        await AM.set("profile", p);
+        S.docx = null;
+        await loadData();
+        render();
+        flash(info.lines.length ? `Word resume ready: found ${info.lines.length} skill line${info.lines.length > 1 ? "s" : ""} (${info.lines.map((l) => l.label).join(", ")}).` : "Word resume saved, but no Skills section was found in it.", !info.lines.length);
+        return;
+      }
       const id = await saveFile(file.name, file.type || "application/pdf", b64, "resume");
       const text = await pdfText(buf);
       const parsed = heuristicParse(text);

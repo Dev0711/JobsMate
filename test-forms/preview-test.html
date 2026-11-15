@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Preview page test</title>
+  <link rel="stylesheet" href="/preview/preview.css">
+  <style id="pageStyle"></style>
+  <script src="/test-forms/shim.js"></script>
+  <script>
+    // stand-ins for the APIs the real preview page uses inside the extension
+    chrome.tabs = { getCurrent: async () => ({ id: 1 }), create: async () => {} };
+    chrome.permissions = { contains: async () => false, request: async () => false };
+  </script>
+  <script src="/lib/common.js"></script>
+</head>
+<body>
+  <header class="bar no-print">
+    <div class="title"><span class="logo">AM</span> <b>Updated resume</b> <span id="fileName" class="muted"></span></div>
+    <div id="changes" class="changes"></div>
+    <div class="actions">
+      <button id="useBtn" class="pri" disabled>Use this PDF as my resume</button>
+      <button id="dlPdf" disabled>Download PDF</button>
+      <button id="dlDocx">Download Word</button>
+      <button id="closeBtn" class="ghost">Discard</button>
+    </div>
+  </header>
+  <main class="no-print" id="status"><div class="msg">Building your PDF…</div></main>
+  <iframe id="pdfView" class="no-print" title="PDF preview" hidden></iframe>
+  <div id="render"></div>
+  <script type="module">
+    import { addSkills, inspectDocx } from "/lib/resumedocx.js";
+    const f = new URLSearchParams(location.search).get("f") || "resume-label-lines.docx";
+    const buf = await (await fetch("/test-forms/resumes/" + f)).arrayBuffer();
+    const info = await inspectDocx(buf);
+    const adds = ["Next.js", "GraphQL", "Kubernetes", "Jest"].map((s) => ({ skill: s, r: AM.placeSkill(s, info.lines) })).filter((x) => x.r).map((x) => ({ skill: x.skill, lineIndex: x.r.index }));
+    const res = await addSkills(buf, adds);
+    let s = ""; for (let i = 0; i < res.buffer.length; i += 0x8000) s += String.fromCharCode.apply(null, res.buffer.subarray(i, i + 0x8000));
+    await chrome.storage.local.set({ "file:t1": { name: f, type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", data: btoa(s) } });
+    await chrome.storage.session.set({ resumePreview: { docxFileId: "t1", baseName: f.replace(/\.docx$/, ""), changes: res.changes } });
+    await import("/preview/preview.js");
+  </script>
+</body>
+</html>
