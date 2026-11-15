@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Apply - Lever/Workday-style React form</title>
+<script src="/test-forms/load.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<style>body{font-family:sans-serif;max-width:640px;margin:20px auto} .field{margin-top:10px} input,textarea{width:100%;padding:6px}</style>
+</head><body>
+<div class="posting-headline"><h2>React Developer</h2></div>
+<div id="root"></div>
+<pre id="state"></pre>
+<script>
+const e = React.createElement;
+function App() {
+  const [s, set] = React.useState({ name: "", email: "", mobile: "", org: "", exp: "", city: "", notice: "", why: "" });
+  const field = (k, label, extra = {}) => e("div", { className: "field" },
+    e("div", { className: "application-label", id: "lbl-" + k }, label),
+    e("input", { "aria-labelledby": "lbl-" + k, value: s[k], onChange: (ev) => set({ ...s, [k]: ev.target.value }), ...extra }));
+  React.useEffect(() => { document.getElementById("state").textContent = JSON.stringify(s); }, [s]);
+  return e("form", null,
+    field("name", "Full name ✱"), field("email", "Email ✱"), field("mobile", "Mobile number ✱"),
+    field("org", "Current company"), field("exp", "Years of experience", { type: "number" }),
+    field("city", "Current location"), field("notice", "How soon can you join? (days)"),
+    e("div", { className: "field" }, e("div", null, "Tell us about a project you're proud of"), e("textarea", { value: s.why, onChange: (ev) => set({ ...s, why: ev.target.value }) })));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(e(App));
+</script>
+</body></html>

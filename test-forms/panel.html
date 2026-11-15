@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ApplyMate panel test harness</title>
+  <link rel="stylesheet" href="/sidepanel/sidepanel.css">
+  <style>
+    html, body { height: 100%; }
+    body { display: grid; grid-template-columns: 380px 1fr; }
+    #panel { overflow-y: auto; border-right: 2px solid #4f46e5; height: 100vh; }
+    #target { width: 100%; height: 100vh; border: 0; background: #fff; }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <header class="top">
+      <div class="brand"><span class="logo">AM</span> ApplyMate</div>
+      <button class="ghost sm" data-act="openSearches">Today's searches</button>
+    </header>
+    <nav class="tabs" role="tablist">
+      <button data-tab="job" class="on">This job</button>
+      <button data-tab="tracker">Tracker <span class="badge" id="overdueBadge" hidden></span></button>
+      <button data-tab="contacts">Referrals</button>
+      <button data-tab="answers">Answers</button>
+      <button data-tab="profile">Profile</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+    <main id="view"></main>
+    <div id="flash" hidden></div>
+  </div>
+  <iframe id="target" src="/test-forms/greenhouse.html"></iframe>
+  <script src="/test-forms/shim.js"></script>
+  <script>
+    // Extra chrome.* stand-ins for the side panel: the "active tab" is the iframe on the right.
+    const target = document.getElementById("target");
+    const framesOf = (w) => { const out = [w]; for (let i = 0; i < w.frames.length; i++) out.push(...framesOf(w.frames[i])); return out; };
+    chrome.tabs = {
+      query: async () => [{ id: 1, url: target.contentWindow.location.href }],
+      create: async (o) => { (window.__opened = window.__opened || []).push(o.url); },
+      reload: async () => target.contentWindow.location.reload(),
+      onActivated: { addListener() {} },
+      onUpdated: { addListener() {} },
+    };
+    chrome.scripting = {
+      executeScript: async ({ target: t, func, args = [] }) => {
+        const wins = t.allFrames ? framesOf(target.contentWindow) : [target.contentWindow];
+        const out = [];
+        for (const w of wins) {
+          w.__tmpFn = w.eval("(" + func.toString() + ")");
+          out.push({ result: await w.__tmpFn(...args) });
+        }
+        return out;
+      },
+    };
+  </script>
+  <script src="/lib/common.js"></script>
+  <script>
+    // wait for the job page's content scripts before the panel starts reading it
+    window.__panelGo = new Promise((r) => { const t = setInterval(() => { try { if (target.contentWindow.__AM_ready) { clearInterval(t); r(); } } catch {} }, 50); });
+  </script>
+  <script type="module">
+    await window.__panelGo;
+    try { await import("/sidepanel/sidepanel.js?v=" + Date.now()); } catch (e) { console.error("panel import failed", e); }
+  </script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Senior Frontend Engineer - Zentrix</title>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"JobPosting","title":"Senior Frontend Engineer","hiringOrganization":{"@type":"Organization","name":"Zentrix"},
+"jobLocation":{"@type":"Place","address":{"addressLocality":"Bengaluru","addressCountry":"IN"}},"datePosted":"2026-11-13",
+"description":"<p>We're looking for a frontend engineer with 3-6 years of experience.</p><ul><li>Strong React and TypeScript</li><li>Experience with Next.js, GraphQL and Redux</li><li>Testing with Jest or Cypress</li><li>Bonus: AWS, Docker</li></ul><p>Contact talent@zentrix.example for questions. Immediate joiners preferred.</p>"}
+</script>
+<script src="/test-forms/load.js"></script>
+<style>body{font-family:sans-serif;max-width:640px;margin:20px auto} label{display:block;margin-top:10px} input,select,textarea{width:100%;padding:6px}</style>
+</head><body>
+<h1 class="app-title">Senior Frontend Engineer</h1><div class="company-name">at Zentrix</div><div class="location">Bengaluru</div>
+<div id="content"><p>We're looking for a frontend engineer with 3-6 years of experience. Strong React and TypeScript, Next.js, GraphQL, Redux, Jest.</p></div>
+<form id="application_form" onsubmit="event.preventDefault();document.title='SUBMITTED'">
+  <label for="first_name">First Name *</label><input id="first_name" name="job_application[first_name]" required>
+  <label for="last_name">Last Name *</label><input id="last_name" name="job_application[last_name]" required>
+  <label for="email">Email *</label><input id="email" type="email" name="job_application[email]" required>
+  <label for="phone">Phone</label><input id="phone" name="job_application[phone]">
+  <label>Resume/CV *<input type="file" id="resume" name="job_application[resume]" required style="display:none"></label>
+  <label for="li">LinkedIn Profile</label><input id="li" name="job_application[answers_attributes][0][text_value]">
+  <label for="web">Website</label><input id="web" name="job_application[answers_attributes][1][text_value]">
+  <label for="gh">GitHub URL</label><input id="gh">
+  <label for="ctc">Current CTC (in LPA) *</label><input id="ctc" required>
+  <label for="ectc">Expected CTC (in LPA) *</label><input id="ectc" required>
+  <label for="np">Notice period *</label>
+  <select id="np" required><option value="">Select...</option><option>Immediate</option><option>15 days</option><option>1 month</option><option>2 months</option><option>3 months</option></select>
+  <label for="yoe">Total years of experience</label>
+  <select id="yoe"><option value="">--</option><option>0-2 years</option><option>3-5 years</option><option>6-8 years</option><option>9+ years</option></select>
+  <fieldset><legend>Are you willing to relocate to Bengaluru? *</legend>
+    <label><input type="radio" name="reloc" value="1"> Yes</label><label><input type="radio" name="reloc" value="0"> No</label></fieldset>
+  <label for="why">Why do you want to leave your current role?</label><textarea id="why"></textarea>
+  <label for="cl">Cover Letter</label><textarea id="cl"></textarea>
+  <label for="hear">How did you hear about this job? *</label><input id="hear" required>
+  <label><input type="checkbox" id="gdpr" required> I agree to the privacy policy</label>
+  <button type="submit">Submit Application</button>
+</form>
+</body></html>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ApplyMate</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo">AM</span> ApplyMate</div>
+    <button class="ghost sm" data-act="openSearches" title="Open today's saved searches (LinkedIn & Naukri, last 24h)">Today's searches</button>
+  </header>
+  <nav class="tabs" role="tablist">
+    <button data-tab="job" class="on">This job</button>
+    <button data-tab="tracker">Tracker <span class="badge" id="overdueBadge" hidden></span></button>
+    <button data-tab="contacts">Referrals</button>
+    <button data-tab="answers">Answers</button>
+    <button data-tab="profile">Profile</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+  <main id="view"></main>
+  <div id="flash" hidden></div>
+  <script src="../lib/common.js"></script>
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>
